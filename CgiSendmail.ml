@@ -39,17 +39,17 @@ let close chan =
   | Unix.WSTOPPED n ->
       raise(Failure(sprintf "%s: stopped by signal %i" !sendmail n))
 
-
+(* FIXME: this looks very wrong *)
 let nl_folding s =
   let n_nl = ref(String.length s) in
   for i = 0 to String.length s - 1 do
     if String.unsafe_get s i = '\n' then incr n_nl
   done;
-  let t = String.create !n_nl in
+  let t = Bytes.create !n_nl in
   let rec folding i j =
     let c = s.[i] in
-    t.[j] <- c;
-    if c = '\n' then (t.[j+1] <- '\t'; folding (i + 1) (j + 2))
+    Bytes.set t j c;
+    if c = '\n' then (Bytes.set t (j+1) '\t'; folding (i + 1) (j + 2))
     else folding (i + 1) (j + 1) in
   folding 0 0
 
