@@ -90,15 +90,15 @@ thread to handle the connection (and thus returns immediately).
 can make to this script.  By default, each connection is
 processed sequentially, so the default value for [max_conns]
 is [1].  If you start processes or threads to handle
-connections, it is your responsability not to accept more than
+connections, it is your responsibility not to accept more than
 [max_conns] connections.  The value of [max_conns] only serves
 to inform the web server about the capabilities of the FCGI
 script.
 
 @param max_reqs is the maximum of requests a web server can
 multiplex through a given connection.  Again, if you start
-processes ot threads to handle requests, it is your
-responsability to limit the number of them.  [max_reqs] is
+processes or threads to handle requests, it is your
+responsibility to limit the number of them.  [max_reqs] is
 only used to inform the web server about how many requests it
 can multiplex on a given connection.  Beware that if you set
 [max_reqs] to [1] but have threads handling different requests
