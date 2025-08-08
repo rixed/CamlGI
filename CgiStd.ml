@@ -1,4 +1,4 @@
-(* File: cgi_std.ml
+(* File: CgiStd.ml
 
    Objective Caml Library for writing (F)CGI programs.
 
@@ -18,10 +18,9 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the file
    LICENSE for more details.
 *)
-(*	$Id: cgi_std.ml,v 1.6 2005/06/12 21:38:12 chris_77 Exp $	*)
 
-open Cgi_types
-open Cgi_common
+open CgiTypes
+open CgiCommon
 
 
 (* [log msg] logs the message [msg] in the server log. *)
@@ -58,7 +57,7 @@ let handle_request_error f request =
   with
   | Exit ->
       if request.header_not_emitted then
-	print_string "Status: 204 No Response\r\n\r\n";
+        print_string "Status: 204 No Response\r\n\r\n";
       exit 0
   | Abort ->
       log "Exception \"Abort\" not caught";
@@ -69,7 +68,7 @@ let handle_request_error f request =
   | e ->
       log("Uncaught exception " ^ Printexc.to_string e);
       close_request_error request cHTTP_INTERNAL_SERVER_ERROR
-	"Internal Server Error"
+        "Internal Server Error"
 
 
 
@@ -80,14 +79,14 @@ let handle_request fork f conn =
   (* Building a hash of the meta-variables *)
   let metavars = Hashtbl.create 40 in
   Array.iter (fun s ->
-		try
-		  let ieq = String.index s '=' in
-		  let i1 = ieq + 1 in
-		  let name = String.sub s 0 ieq
-		  and value = String.sub s i1 (String.length s - i1) in
-		  Hashtbl.add metavars name value
-		with Not_found -> ()
-	     ) (Unix.environment());
+                try
+                  let ieq = String.index s '=' in
+                  let i1 = ieq + 1 in
+                  let name = String.sub s 0 ieq
+                  and value = String.sub s i1 (String.length s - i1) in
+                  Hashtbl.add metavars name value
+                with Not_found -> ()
+             ) (Unix.environment());
   (* GATEWAY_INTERFACE -- version *)
   let gateway =
     try
@@ -108,8 +107,8 @@ let handle_request fork f conn =
     params = Hashtbl.create 10;
     is_multipart = false;
     uploads = Hashtbl.create 1;
-    print_string = Pervasives.print_string;
-    prerr_string = Pervasives.prerr_string;
+    print_string = Stdlib.print_string;
+    prerr_string = Stdlib.prerr_string;
     header_not_emitted = true;
     (* FCGI ouput -- not used here *)
     access = Mutex.create();
@@ -123,34 +122,34 @@ let handle_request fork f conn =
     abort = false;
   } in
   let rmethod = metavar_string request "REQUEST_METHOD" in
-  match String.uppercase rmethod with
+  match String.uppercase_ascii rmethod with
   | "GET" | "HEAD" ->
       let qs = metavar_string request "QUERY_STRING" in
-      parse_query qs request.params;
+      parse_query (Bytes.of_string qs) request.params;
       handle_request_error f request
   | "POST" ->
       (* FIXME: do not really want to read the whole input into mem
-	 but that will do as long as the [upload] struct is as it is.
+         but that will do as long as the [upload] struct is as it is.
       *)
       (* FIXME: Obey max requested sizes *)
       let len = metavar_int request "CONTENT_LENGTH" ~default:0 in
       if len > Sys.max_string_length then
-	close_request_error request 413 "Request Entity Too Large";
-      let data = String.create len in
+        close_request_error request 413 "Request Entity Too Large";
+      let data = Bytes.create len in
       begin
-	try really_input stdin data 0 len
-	with End_of_file ->
-	  close_request_error request cHTTP_BAD_REQUEST
-	    "Not enough data on input"
+        try really_input stdin data 0 len
+        with End_of_file ->
+          close_request_error request cHTTP_BAD_REQUEST
+            "Not enough data on input"
       end;
       begin
-	try parse_post_data data request
-	with Unsupported_media_type t ->
-	  close_request_error request 415 ("Unsupported Media Type: " ^ t)
+        try parse_post_data data request
+        with Unsupported_media_type t ->
+          close_request_error request 415 ("Unsupported Media Type: " ^ t)
       end;
       handle_request_error f request
   | _ ->
       (* FIXME: The following methods are currently unsupported "PUT"
-	 | "DELETE" | "OPTIONS" | "TRACE" *)
+         | "DELETE" | "OPTIONS" | "TRACE" *)
       (* Unknown method *)
       close_request_error request 405 "Method Not Allowed"

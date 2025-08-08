@@ -18,8 +18,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the file
    LICENSE for more details.
 *)
-(* 	$Id: cgi_types.ml,v 1.7 2005/01/25 19:42:14 chris_77 Exp $	 *)
-
 
 type upload_data = {
   upload_value: string;
@@ -27,11 +25,19 @@ type upload_data = {
   upload_content_type: string;
 }
 
+(** Possible roles of the CGI script *)
 type role =
-  | Responder
-  | Authorizer
-  | Filter
+  | Responder (** Receive the information associated with an HTTP
+      request and generates an HTTP response. *)
+  | Authorizer (** Receive the information associated with an HTTP
+       request and generates an (un)authorized
+       decision. *)
+  | Filter (** Receive the information associated with an HTTP
+   request plus an extra stream of data and generates a
+   filtered version of the data stream as an HTTP
+   response. *)
 
+(** CGI or FCGI script *)
 type gateway =
   | CGI of int * int
   | FCGI of int
@@ -47,9 +53,9 @@ type request = {
   role : role;
   gateway : gateway;
   metavars : (string, string) Hashtbl.t; (* CGI metavariables, FCGI
-					    calls them PARAMS *)
+                                            calls them PARAMS *)
   params : (string, string) Hashtbl.t; (* parameters to the script,
-					  via GET or POST *)
+                                          via GET or POST *)
   mutable is_multipart : bool;
   uploads : (string, upload_data) Hashtbl.t;
   print_string : string -> unit;
@@ -69,7 +75,7 @@ type request = {
   keep_conn : bool;
   mutable status : status;
   buf : Buffer.t; (* temporary buffer for STDIN, then contains DATA
-		     (if any). *)
+                     (if any). *)
   mutable abort : bool;
 }
 
@@ -78,7 +84,7 @@ type connection = {
   max_conns : int;
   max_reqs : int;
   handle_requests : ((request -> unit) -> request -> unit) ->
-		  (request -> unit) -> connection ->  unit;
+                  (request -> unit) -> connection ->  unit;
   (* [handle_requests fork f req] function handling the protocol.  It
      is here because it is known after [establish_server] is issued
      (one may imagine that [stdin] is connected for external servers)
@@ -104,12 +110,14 @@ let metavar_int request name ~default =
 
 
 exception Abort
-  (* Exception raised if an abort request is sent. *)
+  (** Exception raised by all terminating cgi methods if the server
+requires to abort the request. *)
+
 
 exception Ignore_record
-  (* Raised if the data sent by the web sever does not conform the
-     spec or because we do not care what such request is (e.g. for a
-     "GET" we do not need stdin). *)
+  (** Raised if the data sent by the web sever does not conform the
+      spec or because we do not care what such request is (e.g. for a
+      "GET" we do not need stdin). *)
 
 exception HttpError of int
 

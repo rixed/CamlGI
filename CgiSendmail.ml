@@ -1,4 +1,4 @@
-(* File: sendmail.ml
+(* File: CGISendmail.ml
 
    Objective Caml Library for writing (F)CGI programs.
 
@@ -18,7 +18,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the file
    LICENSE for more details.
 *)
-(* 	$Id: sendmail.ml,v 1.1 2005/01/19 14:14:12 chris_77 Exp $	 *)
 
 open Printf
 

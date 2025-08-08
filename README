@@ -1,6 +1,11 @@
-#	$Id: README,v 1.4 2005/01/25 19:35:42 chris_77 Exp $
-
   CamlGI - FastCGI and CGI library
+
+  CamlGI supports multiple connections and multiplexed requests.
+  You can execute those concurrently with the model of your choice
+  (unix fork, threads,...).
+
+  This library is mostly compatible with the Cgi library of mod_caml
+  so porting programs between the two is fairly straightforward.
 
 
   Copyright 2004, Christophe Troestler

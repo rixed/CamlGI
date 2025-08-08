@@ -1,4 +1,4 @@
-(* File: cgi_common.ml
+(* File: CgiCommon.ml
 
    Objective Caml Library for writing (F)CGI programs.
 
@@ -18,9 +18,8 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the file
    LICENSE for more details.
 *)
-(* 	$Id: cgi_common.ml,v 1.10 2006/01/08 22:19:31 chris_77 Exp $	 *)
 
-open Cgi_types
+open CgiTypes
 
 
 let rev_split =
@@ -36,12 +35,12 @@ let rev_split =
 let is_prefix =
   let rec is_pre i len pre s =
     if i < len then
-      (String.unsafe_get pre i = String.unsafe_get s i)
+      (Bytes.unsafe_get pre i = Bytes.unsafe_get s i)
       && is_pre (i+1) len pre s
     else true in
   fun prefix s ->
-    (String.length prefix <= String.length s)
-    && is_pre 0 (String.length prefix) prefix s
+    (Bytes.length prefix <= Bytes.length s)
+    && is_pre 0 (Bytes.length prefix) prefix s
 
 
 (* URL encoding and decoding
@@ -63,28 +62,28 @@ let hex_of_char =
   | _ -> raise Hex_of_char
 
 
-let rec decode_range_loop i0 i up s =
+let rec decode_range_loop i0 i up b =
   if i0 >= up then i else begin
-    match String.unsafe_get s i0 with
+    match Bytes.unsafe_get b i0 with
     | '+' ->
-	String.unsafe_set s i ' ';
-	decode_range_loop (succ i0) (succ i) up s
+        Bytes.unsafe_set b i ' ';
+        decode_range_loop (succ i0) (succ i) up b
     | '%' when i0 + 2 < up ->
         let i1 = succ i0 in
         let i2 = succ i1 in
         let i0_next =
           try
-            let v = hex_of_char(String.unsafe_get s i1) lsl 4
-                    + hex_of_char(String.unsafe_get s i2) in
-	    String.unsafe_set s i (Char.chr v);
-	    succ i2
+            let v = hex_of_char(Bytes.unsafe_get b i1) lsl 4
+                    + hex_of_char(Bytes.unsafe_get b i2) in
+            Bytes.unsafe_set b i (Char.chr v);
+            succ i2
           with Hex_of_char ->
-	    String.unsafe_set s i '%';
-	    i1 in
-	decode_range_loop i0_next (succ i) up s
+            Bytes.unsafe_set b i '%';
+            i1 in
+        decode_range_loop i0_next (succ i) up b
     | c ->
-	String.unsafe_set s i c;
-	decode_range_loop (succ i0) (succ i) up s
+        Bytes.unsafe_set b i c;
+        decode_range_loop (succ i0) (succ i) up b
   end
 
 let is_space c =  c = ' ' || c = '\t' || c = '\r' || c = '\n'
@@ -93,26 +92,28 @@ let is_space c =  c = ' ' || c = '\t' || c = '\r' || c = '\n'
    of heading and trailing spaces. *)
 let rm_htspace =
   let rec trailing_spaces j s = (* assume there is i s.t. s.[i] <> ' ' *)
-    if is_space(String.unsafe_get s j) then trailing_spaces (pred j) s
+    if is_space(Bytes.unsafe_get s j) then trailing_spaces (pred j) s
     else j in
-  let rec rm_spaces i up s =
-    if i >= up then "" else begin
-      if is_space(String.unsafe_get s i) then rm_spaces (succ i) up s
+  let rec rm_spaces i up b =
+    if i >= up then Bytes.empty else begin
+      if is_space(Bytes.unsafe_get b i) then rm_spaces (succ i) up b
       else
-        (* s.[i] <> space so trailing_spaces will stop and return j >= i. *)
-        String.sub s i (trailing_spaces (pred up) s + 1 - i)
+        (* b.[i] <> space so trailing_spaces will stop and return j >= i. *)
+        Bytes.sub b i (trailing_spaces (pred up) b + 1 - i)
     end in
-  fun low up s -> rm_spaces low up s
+  fun low up b -> rm_spaces low up b
 
 (* We strip heading and trailing spaces of key-value data (even though
    it does not conform the specs) because certain browsers do it, so
    the user should not rely on them.
    See e.g. https://bugzilla.mozilla.org/show_bug.cgi?id=114997#c6 *)
-let decode_range s low up =
-  if low >= up then "" else
-    let up = decode_range_loop low low up s in
-    rm_htspace low up s
-    (* String.sub s low (up - low) *)
+let decode_range b low up =
+  if low >= up then ""
+  else
+    let up = decode_range_loop low low up b in
+    rm_htspace low up b |>
+    Bytes.to_string
+    (* Bytes.sub b low (up - low) *)
 
 
 
@@ -121,7 +122,7 @@ let decode_range s low up =
 (* Use a table lookup for speed. *)
 let char_of_hex =
   let hex = [| '0'; '1'; '2'; '3'; '4'; '5'; '6'; '7'; '8'; '9';
-	       'A'; 'B'; 'C'; 'D'; 'E'; 'F' |] in
+               'A'; 'B'; 'C'; 'D'; 'E'; 'F' |] in
   fun i -> Array.unsafe_get hex i
 
 
@@ -132,30 +133,30 @@ let encode_wrt is_special s0 =
     if is_special(String.unsafe_get s0 i) then
       encoded_length := !encoded_length + 2
   done;
-  let s = String.create !encoded_length in
-  let rec do_enc i0 i = (* copy the encoded string in s *)
+  let b = Bytes.create !encoded_length in
+  let rec do_enc i0 i = (* copy the encoded string in b *)
     if i0 < len then begin
       let s0i0 = String.unsafe_get s0 i0 in
       if is_special s0i0 then begin
         let c = Char.code s0i0 in
         let i1 = succ i in
         let i2 = succ i1 in
-        String.unsafe_set s i '%';
-        String.unsafe_set s i1 (char_of_hex (c lsr 4));
-        String.unsafe_set s i2 (char_of_hex (c land 0x0F));
+        Bytes.unsafe_set b i '%';
+        Bytes.unsafe_set b i1 (char_of_hex (c lsr 4));
+        Bytes.unsafe_set b i2 (char_of_hex (c land 0x0F));
         do_enc (succ i0) (succ i2)
       end
       else if s0i0 = ' ' then begin
-	String.unsafe_set s i '+';
+        Bytes.unsafe_set b i '+';
         do_enc (succ i0) (succ i)
       end
       else begin
-        String.unsafe_set s i s0i0;
+        Bytes.unsafe_set b i s0i0;
         do_enc (succ i0) (succ i)
       end
     end in
   do_enc 0 0;
-  s
+  Bytes.to_string b
 
 
 (* Unreserved characters consist of all alphanumeric chars and the
@@ -195,19 +196,19 @@ let encode_cookie = encode_wrt special_rfc2068
 
 let rec get_key qs i0 i up h =
   if i >= up then Hashtbl.add h (decode_range qs i0 up) "" else
-    match String.unsafe_get qs i with
+    match Bytes.unsafe_get qs i with
     | '=' -> get_val qs (i+1) (i+1) up (decode_range qs i0 i) h
     | '&' ->
-	Hashtbl.add h (decode_range qs i0 i) ""; (* key but no val *)
-	get_key qs (i+1) (i+1) up h
+        Hashtbl.add h (decode_range qs i0 i) ""; (* key but no val *)
+        get_key qs (i+1) (i+1) up h
     | _ ->
-	get_key qs i0 (i+1) up h
+        get_key qs i0 (i+1) up h
 and get_val qs i0 i up key h =
   if i >= up then Hashtbl.add h key (decode_range qs i0 up) else
-    match String.unsafe_get qs i with
+    match Bytes.unsafe_get qs i with
     | '&' ->
-	Hashtbl.add h key (decode_range qs i0 i);
-	get_key qs (i+1) (i+1) up h
+        Hashtbl.add h key (decode_range qs i0 i);
+        get_key qs (i+1) (i+1) up h
     | _ -> get_val qs i0 (i+1) up key h
 
 (* [parse_query_range qs low up h] adds the key-val pairs found in
@@ -216,7 +217,7 @@ let parse_query_range qs low up h =
   get_key qs low low up h
 
 let parse_query qs h =
-  if qs <> "" then get_key qs 0 0 (String.length qs) h
+  if Bytes.length qs > 0 then get_key qs 0 0 (Bytes.length qs) h
 
 
 (* Knuth-Morris-Pratt algorithm
@@ -250,12 +251,12 @@ let search pat =
     and j = ref 0 in
     try
       while !i < i1 do
-	while !j >= 0 && String.unsafe_get s !i <> String.unsafe_get pat !j do
-	  j := Array.unsafe_get b !j
-	done;
-	incr i;
-	incr j;
-	if !j = m then raise(Found(!i - !j))
+        while !j >= 0 && Bytes.unsafe_get s !i <> String.unsafe_get pat !j do
+          j := Array.unsafe_get b !j
+        done;
+        incr i;
+        incr j;
+        if !j = m then raise(Found(!i - !j))
       done;
       raise Not_found
     with Found i -> i
@@ -265,20 +266,20 @@ let search pat =
    i1] but in a case insensitive manner. *)
 let search_case_fold pat =
   let m = String.length pat in
-  let pat = String.lowercase pat in
-  let b = preprocess pat m in
-  fun s i0 i1 ->
+  let pat = String.lowercase_ascii pat in
+  let ppat = preprocess pat m in
+  fun b i0 i1 ->
       let i = ref i0
     and j = ref 0 in
     try
       while !i < i1 do
-	while !j >= 0 && Char.lowercase(String.unsafe_get s !i)
-	  <> String.unsafe_get pat !j do
-	  j := Array.unsafe_get b !j
-	done;
-	incr i;
-	incr j;
-	if !j = m then raise(Found(!i - !j))
+        while !j >= 0 && Char.lowercase_ascii (Bytes.unsafe_get b !i)
+          <> String.unsafe_get pat !j do
+          j := Array.unsafe_get ppat !j
+        done;
+        incr i;
+        incr j;
+        if !j = m then raise(Found(!i - !j))
       done;
       raise Not_found
     with Found i -> i
@@ -303,14 +304,14 @@ let special_rfc2045 = function
   | _ -> false
 
 let rec get_token s i1 i =
-  if i = i1 || special_rfc2045(String.unsafe_get s i)
+  if i = i1 || special_rfc2045(Bytes.unsafe_get s i)
   then i
   else get_token s i1 (succ i)
 
 (* ',' allowed in boundary but unlikely -- disabled for MSIE bug, see
    [get_boundary] *)
 let rec get_token_boundary s i1 i =
-  if i = i1 || (let c = String.unsafe_get s i in special_rfc2045 c || c = ',')
+  if i = i1 || (let c = Bytes.unsafe_get s i in special_rfc2045 c || c = ',')
   then i
   else get_token_boundary s i1 (succ i)
 
@@ -318,60 +319,60 @@ let rec get_token_boundary s i1 i =
 (* [get_quoted_string s i0 i1 i j] get the string starting at [i0]
    (i.e. s.[i0-1] = '"') and un-escape it.  [s.[i0 .. i1-1]] may be
    overwritten. *)
-let rec get_quoted_string s i1 i j =
+let rec get_quoted_string b i1 i j =
   if i = i1 then raise Not_found;
-  match String.unsafe_get s i with
+  match Bytes.unsafe_get b i with
   | '"' -> j
   | '\\' ->
       let i' = succ i in
       if i' = i1 then raise Not_found;
-      String.unsafe_set s j (String.unsafe_get s i');
-      get_quoted_string s i1 (succ i') (succ j)
+      Bytes.unsafe_set b j (Bytes.unsafe_get b i');
+      get_quoted_string b i1 (succ i') (succ j)
   | '\r' ->
       (* Check if folding *)
       let i' = succ i in
       let i'' = succ i' in
-      if i'' < i1 && String.unsafe_get s i' = '\n'
-	&& (let c = String.unsafe_get s i'' in c = ' ' || c = '\t') then begin
-	  String.unsafe_set s j ' '; (* folding equiv SPACE *)
-	  skip_folding s i1 (succ i'') (succ j)
-	end
+      if i'' < i1 && Bytes.unsafe_get b i' = '\n'
+        && (let c = Bytes.unsafe_get b i'' in c = ' ' || c = '\t') then begin
+          Bytes.unsafe_set b j ' '; (* folding equiv SPACE *)
+          skip_folding b i1 (succ i'') (succ j)
+        end
       else raise Not_found;
   | c ->
       (* qtext *)
-      String.unsafe_set s j c;
-      get_quoted_string s i1 (succ i) (succ j)
+      Bytes.unsafe_set b j c;
+      get_quoted_string b i1 (succ i) (succ j)
 
-and skip_folding s i1 i j =
+and skip_folding b i1 i j =
   if i > i1 then raise Not_found;
   (* We should check that ['\r'] is followed by ['\n' SPACE] but we
      are permissive... *)
-  match String.unsafe_get s i with
-  | ' ' | '\t' | '\r' | '\n' -> skip_folding s i1 (succ i) j
-  | _ -> get_quoted_string s i1 i j
+  match Bytes.unsafe_get b i with
+  | ' ' | '\t' | '\r' | '\n' -> skip_folding b i1 (succ i) j
+  | _ -> get_quoted_string b i1 i j
 
 
-let get_value s i0 i1 =
-  if String.unsafe_get s i0 = '"'
+let get_value b i0 i1 =
+  if Bytes.unsafe_get b i0 = '"'
   then
     let i0 = succ i0 in
-    let i = get_quoted_string s i1 i0 i0 in
-    String.sub s i0 (i - i0)
+    let i = get_quoted_string b i1 i0 i0 in
+    Bytes.sub_string b i0 (i - i0)
   else
-    String.sub s i0 ((get_token s i1 i0) - i0)
+    Bytes.sub_string b i0 ((get_token b i1 i0) - i0)
 
-let get_value_boundary s i0 i1 =
-  if String.unsafe_get s i0 = '"'
+let get_value_boundary b i0 i1 =
+  if Bytes.unsafe_get b i0 = '"'
   then
     let i0 = succ i0 in
-      let i = ref(get_quoted_string s i1 i0 i0) in
+      let i = ref(get_quoted_string b i1 i0 i0) in
       (* Remove trailing spaces *)
       while !i >= i0
-	&& (let c = String.unsafe_get s !i in c = ' ' || c = '\t')
+        && (let c = Bytes.unsafe_get b !i in c = ' ' || c = '\t')
       do decr i done;
-      String.sub s i0 (!i - i0)
+      Bytes.sub b i0 (!i - i0)
   else
-    String.sub s i0 ((get_token_boundary s i1 i0) - i0)
+    Bytes.sub b i0 ((get_token_boundary b i1 i0) - i0)
 
 
 
@@ -388,10 +389,10 @@ let get_boundary =
   let bd = search_case_fold bd in
   fun content_type ->
     try
-      let endbd = bd content_type 0 (String.length content_type) + lbd in
-      get_value_boundary content_type endbd (String.length content_type)
+      let endbd = bd content_type 0 (Bytes.length content_type) + lbd in
+      get_value_boundary content_type endbd (Bytes.length content_type)
     with
-      Not_found -> ""
+      Not_found -> Bytes.empty
 
 (* Headers of the different parts *)
 
@@ -421,18 +422,19 @@ let get_filename =
    will be treated as a param and not a file.  *)
 let get_content_type =
   let srch = search_case_fold "Content-Type:" in
-  fun s i0 i1 ->
+  fun b i0 i1 ->
     try
-      let i = ref(srch s i0 i1 + 13 (* "Content-Type:" *) ) in
+      let i = ref(srch b i0 i1 + 13 (* "Content-Type:" *) ) in
       (* Skip space *)
       while !i < i1
-	&& (let c = String.unsafe_get s !i in c = ' ' || c = '\t')
+        && (let c = Bytes.unsafe_get b !i in c = ' ' || c = '\t')
       do incr i done;
       let i0 = !i in
-      i := get_token s i1 !i;  (* First token *)
-      if !i < i1 && String.unsafe_get s !i = '/' then
-	i := get_token s i1 (!i + 1);  (* Second token *)
-      String.lowercase(String.sub s i0 (!i - i0))
+      i := get_token b i1 !i;  (* First token *)
+      if !i < i1 && Bytes.unsafe_get b !i = '/' then
+        i := get_token b i1 (!i + 1);  (* Second token *)
+      Bytes.lowercase_ascii (Bytes.sub b i0 (!i - i0)) |>
+      Bytes.to_string
     with
       Not_found -> "application/octet-stream"
 
@@ -444,9 +446,9 @@ let get_content_transfer_encoding =
       let i = ref(srch s i0 i1 + 26 (* "Content-Transfer-Encoding:" *) ) in
       (* Skip space *)
       while !i < i1
-	&& (let c = String.unsafe_get s !i in c = ' ' || c = '\t')
+        && (let c = Bytes.unsafe_get s !i in c = ' ' || c = '\t')
       do incr i done;
-      String.lowercase(get_value s !i i1)
+      String.lowercase_ascii (get_value s !i i1)
     with
       Not_found -> ""
 
@@ -473,23 +475,24 @@ let search_2dash = search "--"
    appropriate [request] fields.
    @raise Not_found if an expected pattern is not found. *)
 let parse_multipart boundary data request =
-  let len_data = String.length data in
+  let len_data = Bytes.length data in
   let boundary, part1 =
-    if boundary = "" then
+    if Bytes.length boundary = 0 then
       (* It seems older versions of Netscape are unreliable about
-	 providing a boundary string.  We try to determine it from
-	 [data] by looking for "--" followed by a token. *)
-      let i0 = search_2dash data 0 (String.length data) in
+         providing a boundary string.  We try to determine it from
+         [data] by looking for "--" followed by a token. *)
+      let i0 = search_2dash data 0 (Bytes.length data) in
       let i1 = ref i0 in
       while !i1 < len_data
-	&& not(special_rfc2045(String.unsafe_get data !i1)) do incr i1 done;
+        && not(special_rfc2045(Bytes.unsafe_get data !i1)) do incr i1 done;
       let i2 = search_crlf data !i1 len_data in
-      (String.sub data i0 (!i1 - i0), i2)
+      (Bytes.sub_string data i0 (!i1 - i0), i2)
     else
-      let bd = "--" ^ boundary in
-      let i0 = search bd  data 0 len_data in
+      let bd = "--" ^ Bytes.to_string boundary in
+      let i0 = search bd data 0 len_data in
       let i2 = search_crlf data (i0 + String.length bd) len_data in
       (bd, i2)  in
+  (* boundary is now a string *)
   let search_bd = search ("\r\n" ^ boundary) in
   let len_bd = 2 (* \r\n *) + String.length boundary in
 
@@ -499,32 +502,32 @@ let parse_multipart boundary data request =
       (* Get head information (if any) *)
       let end_head = search_2crlf data !begin_part len_data in
       (* FIXME: Should we restrict the search for "name=" and
-	 "filename=" to the "Content-Disposition:" line and be more
-	 careful they do not apprear in values? *)
+         "filename=" to the "Content-Disposition:" line and be more
+         careful they do not apprear in values? *)
       let name = get_name data !begin_part end_head in
       let filename, is_file =
-	try (get_filename data !begin_part end_head, true)
-	with Not_found -> ("", false) in
+        try (get_filename data !begin_part end_head, true)
+        with Not_found -> ("", false) in
       let content_type = get_content_type data !begin_part end_head in
-      let encoding = get_content_transfer_encoding data !begin_part end_head in
+      let _encoding = get_content_transfer_encoding data !begin_part end_head in
       (* Get data and add it to the request *)
       let d0 = end_head + 4 (* \r\n\r\n *) in
       let d1 = search_bd data d0 len_data in
-      let value = String.sub data d0 (d1 - d0) in
+      let value = Bytes.sub_string data d0 (d1 - d0) in
       if is_file then
-	Hashtbl.add request.uploads name {
-	  upload_value = value;
-	  upload_filename = filename;
-	  upload_content_type = content_type;
-	  (* encoding *)
-	}
+        Hashtbl.add request.uploads name {
+          upload_value = value;
+          upload_filename = filename;
+          upload_content_type = content_type;
+          (* encoding *)
+        }
       else
-	Hashtbl.add request.params name value;
+        Hashtbl.add request.params name value;
       (* Is it the closing boundary? *)
       let end_bd = d1 + len_bd in
-      if end_bd + 2 <= len_data && String.unsafe_get data end_bd = '-'
-	  && String.unsafe_get data (end_bd + 1) = '-' then
-	    raise Exit;
+      if end_bd + 2 <= len_data && Bytes.unsafe_get data end_bd = '-'
+          && Bytes.unsafe_get data (end_bd + 1) = '-' then
+            raise Exit;
       (* Skip the boundary line and get the next part *)
       begin_part := search_crlf data end_bd len_data
     done
@@ -539,7 +542,7 @@ exception Unsupported_media_type of string
    insensitive way.  [p] is assumed to be lowercase. *)
 let is_prefix_ci p s =
   let lp = String.length p in
-  (lp <= String.length s) && (p = String.lowercase(String.sub s 0 lp))
+  (lp <= String.length s) && (p = String.lowercase_ascii (String.sub s 0 lp))
 
 
 (* FIXME: using Knutt-Moris-Pratt algo, one should be able to parse
@@ -553,7 +556,7 @@ let parse_post_data data request =
     parse_query data request.params
   else if is_prefix_ci "multipart/form-data" content_type then begin
     request.is_multipart <- true;
-    let boundary = get_boundary content_type in
+    let boundary = get_boundary (Bytes.of_string content_type) in
     try
       parse_multipart boundary data request
     with
@@ -572,7 +575,7 @@ let string_of_weekday =
 
 let string_of_month =
   let month = [| "Jan"; "Feb"; "Mar"; "Apr"; "May"; "Jun"; "Jul"; "Aug";
-		 "Sep"; "Oct"; "Nov"; "Dec" |] in
+                 "Sep"; "Oct"; "Nov"; "Dec" |] in
   fun i -> Array.unsafe_get month i
 
 
@@ -597,8 +600,8 @@ and anything you might have done that resulted in this error.
 </p>
 <br/>
 <hr/>
-<i><a href=\"http://www.sf.net/ocaml-cgi\">CamlGI</a>
--- a powerful <a href=\"http://caml.inria.fr/\">OCaml</a> library
+<i><a href=\"https://sourceforge.net/projects/ocaml-cgi/\">CamlGI</a>
+-- a powerful <a href=\"https://ocaml.org/\">OCaml</a> library
 to easily create (Fast)CGI applications!
 </i>
 </body></html>"

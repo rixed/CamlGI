@@ -1,4 +1,4 @@
-(* File: cgi.ml
+(* File: CGIDbiPool.ml
 
    Objective Caml Library for writing (F)CGI programs.
 
@@ -20,7 +20,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the file
    LICENSE for more details.
 *)
-(* 	$Id: dbiPool.ml,v 1.1 2005/06/12 21:43:02 chris_77 Exp $	 *)
 
 module type DbiDriverT =
 sig
@@ -58,19 +57,19 @@ module DbiPool (Dbi_driver : DbiDriverT) = struct
      * pool testing the handles (in case they have timed out or
      * something).  *)
     let rec loop = function
-	[] ->
-	  (* No handles left. Need to create a new connection. *)
-	  let dbh =
-	    Dbi_driver.connect ?host ?port ?user ?password database_name in
-	  dbh, []
+        [] ->
+          (* No handles left. Need to create a new connection. *)
+          let dbh =
+            Dbi_driver.connect ?host ?port ?user ?password database_name in
+          dbh, []
       | dbh :: dbhs ->
-	  (* Test if dbh is a working handle. If so, return it. *)
-	  if Dbi_driver.ping dbh then
-	    dbh, dbhs
-	  else (
-	    Dbi_driver.close dbh;
-	    loop dbhs
-	  )
+          (* Test if dbh is a working handle. If so, return it. *)
+          if Dbi_driver.ping dbh then
+            dbh, dbhs
+          else (
+            Dbi_driver.close dbh;
+            loop dbhs
+          )
     in
     let dbh, remainder = loop dbh_list in
 
@@ -82,11 +81,11 @@ module DbiPool (Dbi_driver : DbiDriverT) = struct
      *)
 (*     Request.register_cleanup r *)
 (*       (fun () -> *)
-	 if not (Dbi_driver.closed dbh) then (
-	   Dbi_driver.rollback dbh;
-	   let dbh_list = Hashtbl.find pools key in
-	   Hashtbl.replace pools key (dbh_list @ [dbh])
-	 );
+         if not (Dbi_driver.closed dbh) then (
+           Dbi_driver.rollback dbh;
+           let dbh_list = Hashtbl.find pools key in
+           Hashtbl.replace pools key (dbh_list @ [dbh])
+         );
 (* ); *)
 
     dbh

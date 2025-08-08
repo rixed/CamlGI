@@ -1,4 +1,4 @@
-(* File: template.ml
+(* File: CgiTemplate.ml
 
    Copyright (C) 2004
 
@@ -16,8 +16,6 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the file
    LICENSE for more details.
 *)
-(* 	$Id: template.ml,v 1.4 2006/01/08 22:22:02 chris_77 Exp $	 *)
-
 
 (* Escaping
  ***********************************************************************)
@@ -52,7 +50,7 @@ let escape_html_tag str =
 
 let escape = function
   | EscapeNone -> (fun str -> str)
-  | EscapeUrl -> Cgi_common.encode
+  | EscapeUrl -> CgiCommon.encode
   | EscapeHtml -> escape_html
   | EscapeHtmlTag -> escape_html_tag
   | EscapeHtmlTextarea -> escape_html_textarea
@@ -84,10 +82,10 @@ let input_whole_file filename =
 
 type compiled = node list
 and node =
-  | Plain of string 			(* Just some text. *)
-  | Var of escape * string		(* ::tag:: *)
+  | Plain of string                         (* Just some text. *)
+  | Var of escape * string                (* ::tag:: *)
   | If of string * compiled * compiled  (* ::if(..):: .. ::else:: .. ::end:: *)
-  | Table of string * compiled		(* ::table(..):: .. ::end:: *)
+  | Table of string * compiled                (* ::table(..):: .. ::end:: *)
   | Call of escape * string * string list
 
 (* [prepend_rev l1 l2] = [List.rev l1 @ l2] *)
@@ -129,8 +127,8 @@ let include_re =
   Str.regexp("::include([ \t\r\n]*\\([^(): \t\r\n]+\\)[ \t\r\n]*)::")
 let call_re =
   Str.regexp("::call(" ^ ident
-	     ^ "\\(\\([ \t]*,[ \t]*[a-zA-Z_]+[a-zA-Z0-9_]*\\)*\\)[ \t]*)"
-	     ^ "\\([_a-z]*\\)::")
+             ^ "\\(\\([ \t]*,[ \t]*[a-zA-Z_]+[a-zA-Z0-9_]*\\)*\\)[ \t]*)"
+             ^ "\\([_a-z]*\\)::")
 let comma_re = Str.regexp "[ \t]*,[ \t]*"
 
 (* The compiled templates are not mutable.  We keep a list of
@@ -144,19 +142,19 @@ type closing =
   | End  (* ::end:: *)
   | Eos  (* End of string *)
 
-let rec compile_template ~filename source =
+let rec compile_template ?filename source =
   match filename with
   | None ->
       let ct, _, _ =
-	compile (Sys.getcwd()) source (String.length source) 0 [] in
+        compile (Sys.getcwd()) source (String.length source) 0 [] in
       ct
   | Some f ->
       try Hashtbl.find compiled_templates f
       with Not_found ->
-	let ct, _, _ =
-	  compile (Filename.dirname f) source (String.length source) 0 [] in
-	Hashtbl.add compiled_templates f ct;
-	ct
+        let ct, _, _ =
+          compile (Filename.dirname f) source (String.length source) 0 [] in
+        Hashtbl.add compiled_templates f ct;
+        ct
 
 (* [compile basename source len i0 ct] returns [(ct', closing, i)]
    where [ct'] is the compiled template, [closing] is the "token"
@@ -183,15 +181,15 @@ and compile basename source len i0 ct =
       let (ct_then, cl, i) = compile basename source len i_end [] in
       match cl with
       | Else ->
-	  let (ct_else, cl, i) = compile basename source len i [] in
-	  begin match cl with
-	  | End ->
-	      compile basename source len i (If(cond, ct_then, ct_else) :: ct)
-	  | _ -> failwith("Missing ::end:: for ::if(" ^ cond
-			  ^ "):: ... ::else::")
-	  end
+          let (ct_else, cl, i) = compile basename source len i [] in
+          begin match cl with
+          | End ->
+              compile basename source len i (If(cond, ct_then, ct_else) :: ct)
+          | _ -> failwith("Missing ::end:: for ::if(" ^ cond
+                          ^ "):: ... ::else::")
+          end
       | End ->
-	  compile basename source len i (If(cond, ct_then, []) :: ct)
+          compile basename source len i (If(cond, ct_then, []) :: ct)
       | Eos -> failwith("Missing ::end:: for ::if(" ^ cond ^ ")::")
 
     else if Str.string_match table_re source i then
@@ -200,19 +198,19 @@ and compile basename source len i0 ct =
       let (ct_rows, cl, i) = compile basename source len i_end [] in
       match cl with
       | End ->
-	  compile basename source len i (Table(table, ct_rows) :: ct)
+          compile basename source len i (Table(table, ct_rows) :: ct)
       | _ -> failwith("Missing ::end:: for ::table(" ^ table ^ ")::")
 
     else if Str.string_match call_re source i then
       let fname = Str.matched_group 1 source in
       let args = Str.matched_group 2 source in
       let esc =
-	match Str.matched_group 4 source with
-	| "_url" -> EscapeUrl
-	| "_html" -> EscapeHtml
-	| "_html_tag" -> EscapeHtmlTag
-	| "_html_textarea" -> EscapeHtmlTextarea
-	| _ -> EscapeNone in
+        match Str.matched_group 4 source with
+        | "_url" -> EscapeUrl
+        | "_html" -> EscapeHtml
+        | "_html_tag" -> EscapeHtmlTag
+        | "_html_textarea" -> EscapeHtmlTextarea
+        | _ -> EscapeNone in
       let i_end = Str.match_end() in
       let ct = Call(esc, fname, Str.split comma_re args) :: ct in
       compile basename source len i_end ct
@@ -221,11 +219,11 @@ and compile basename source len i0 ct =
       let filename = Str.matched_group 1 source in
       let i_end = Str.match_end() in
       let filename =
-	if Filename.is_relative filename
-	then Filename.concat basename filename
-	else filename in
+        if Filename.is_relative filename
+        then Filename.concat basename filename
+        else filename in
       let source = input_whole_file filename in
-      let ct_incl = compile_template ~filename:(Some filename) source in
+      let ct_incl = compile_template ~filename source in
       compile basename source len i_end (prepend_rev ct_incl ct)
 
     else
@@ -242,18 +240,18 @@ and compile basename source len i0 ct =
  ***********************************************************************)
 
 type var =
-  | VarString of string				(* ::tag:: *)
-  | VarTable of table_row list			(* ::table(tag):: *)
-  | VarConditional of bool			(* ::if(tag):: *)
-  | VarCallback of (string list -> string)	(* ::call(f, x1,...):: *)
+  | VarString of string                                (* ::tag:: *)
+  | VarTable of table_row list                        (* ::table(tag):: *)
+  | VarConditional of bool                        (* ::if(tag):: *)
+  | VarCallback of (string list -> string)        (* ::call(f, x1,...):: *)
 and table_row = (string * var) list
 
 
 let find bindings k =
   try  Hashtbl.find bindings k
   with Not_found ->
-    failwith("CamlGI.Template: tag/table ::" ^ k
-	     ^ ":: was not assigned any value.")
+    failwith("CgiTemplate: tag/table ::" ^ k
+             ^ ":: was not assigned any value.")
 
 class template ?filename source =
   let bindings = Hashtbl.create 5 in
@@ -283,42 +281,42 @@ object(self)
     let resolve_variable name =
       match find bindings name with
       | VarString str -> str
-      | _ -> failwith ("CamlGI.Template: ::" ^ name
-		       ^ ":: should be a simple string tag.")
+      | _ -> failwith ("CgiTemplate: ::" ^ name
+                       ^ ":: should be a simple string tag.")
     and eval_condition name =
       match find bindings name with
       | VarConditional b -> b
-      | _ -> failwith ("CamlGI.Template: ::if(" ^ name
-		       ^ "):: should be a conditional tag.")
+      | _ -> failwith ("CgiTemplate: ::if(" ^ name
+                       ^ "):: should be a conditional tag.")
     and resolve_table name =
       match find bindings name with
       | VarTable tbl -> tbl
-      | _ -> failwith ("CamlGI.Template: ::table(" ^ name
-		       ^ "):: should be a table tag.")
+      | _ -> failwith ("CgiTemplate: ::table(" ^ name
+                       ^ "):: should be a table tag.")
     and resolve_callback name =
       match find bindings name with
       | VarCallback f -> f
-      | _ -> failwith ("CamlGI.Template: ::call(" ^ name
-		       ^ "[,...]):: should be a callback function.") in
+      | _ -> failwith ("CgiTemplate: ::call(" ^ name
+                       ^ "[,...]):: should be a callback function.") in
     let rec substitute (out:string -> unit) ct =
       let out_node = function
-	| Plain text -> out text
-	| Var(esc, name) ->
-	    out(escape esc (resolve_variable name))
-	| If(cond, then_clause, else_clause) ->
-	    substitute out (if eval_condition cond
-			    then then_clause else else_clause)
-	| Table(name, body) ->
-	    (* For each table [row], add the corresponding bindings,
-	        process the table body and then remove them. *)
-	    let process_row row =
-	      List.iter (fun (k, v) -> Hashtbl.add bindings k v) row;
-	      substitute out body;
-	      List.iter (fun (k, v) -> Hashtbl.remove bindings k) row;
-	    in
-	    List.iter process_row (resolve_table name);
-	| Call(esc, fname, args) ->
-	    out(escape esc (resolve_callback fname args)) in
+        | Plain text -> out text
+        | Var(esc, name) ->
+            out(escape esc (resolve_variable name))
+        | If(cond, then_clause, else_clause) ->
+            substitute out (if eval_condition cond
+                            then then_clause else else_clause)
+        | Table(name, body) ->
+            (* For each table [row], add the corresponding bindings,
+                process the table body and then remove them. *)
+            let process_row row =
+              List.iter (fun (k, v) -> Hashtbl.add bindings k v) row;
+              substitute out body;
+              List.iter (fun (k, v) -> Hashtbl.remove bindings k) row;
+            in
+            List.iter process_row (resolve_table name);
+        | Call(esc, fname, args) ->
+            out(escape esc (resolve_callback fname args)) in
       List.iter out_node ct  in
     fun out -> substitute out ct0
 end

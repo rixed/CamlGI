@@ -1,4 +1,4 @@
-(* File: cookie.ml
+(* File: CgiCookie.ml
 
    Objective Caml Library for writing (F)CGI programs.
 
@@ -18,9 +18,8 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the file
    LICENSE for more details.
 *)
-(* 	$Id: cookie.ml,v 1.2 2005/01/25 19:40:37 chris_77 Exp $	 *)
 
-open Cgi_common
+open CgiCommon
 
 
 class cookie ~name ~value ~max_age ~domain ~path ~secure =
@@ -51,8 +50,8 @@ object (self)
     let buf = Buffer.create 128 in
     if String.length name > 0 && String.unsafe_get name 0 = '$' then
       (* TRICK: names cannot start with '$', so if it does  add '+'
-	 in front to protect it. '+' will be decoded as space, then
-	 stripped. *)
+         in front to protect it. '+' will be decoded as space, then
+         stripped. *)
       Buffer.add_char buf '+';
     Buffer.add_string buf (encode_cookie name);
     Buffer.add_char buf '=';
@@ -73,12 +72,12 @@ object (self)
     begin match max_age with
     | None -> ()
     | Some m ->
-	Buffer.add_string buf "; Max-Age=";
-	Buffer.add_string buf (if m >= 0 then (string_of_int m) else "0");
-	(* For compatibility with old browsers: *)
-	Buffer.add_string buf "; expires=";
-	Buffer.add_string buf (if m > 0 then (Expires.make m)
-			       else "Thu, 1 Jan 1970 00:00:00 GMT");
+        Buffer.add_string buf "; Max-Age=";
+        Buffer.add_string buf (if m >= 0 then (string_of_int m) else "0");
+        (* For compatibility with old browsers: *)
+        Buffer.add_string buf "; expires=";
+        Buffer.add_string buf (if m > 0 then (CgiExpires.make m)
+                               else "Thu, 1 Jan 1970 00:00:00 GMT");
     end;
     Buffer.contents buf
 end
@@ -91,15 +90,17 @@ let cookie ?max_age ?(domain="") ?(path="") ?(secure=false) name value =
 let parse =
   let make_cookie s =
     let name, value =
+      let b = Bytes.of_string s in
       try
-	let i = String.index s '=' in
-	(* FIXME: Must support quoted strings? *)
-	(* FIXME: $Version, $Path, $Domain *)
-	(* Here it is important that we strip heading and trailing spaces *)
-	(decode_range s 0 i,
-	 decode_range s (succ i) (String.length s))
+        let i = Bytes.index b '=' in
+        (* FIXME: Must support quoted strings? *)
+        (* FIXME: $Version, $Path, $Domain *)
+        (* Here it is important that we strip heading and trailing spaces *)
+        decode_range b 0 i,
+        decode_range b (succ i) (Bytes.length b)
       with
-	Not_found -> (decode_range s 0 (String.length s), "") in
+        Not_found ->
+          decode_range b 0 (Bytes.length b), "" in
     cookie name value in
   fun header ->
     if header = "" then []

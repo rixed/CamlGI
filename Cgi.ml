@@ -1,4 +1,4 @@
-(* File: cgi.ml
+(* File: Cgi.ml
 
    Objective Caml Library for writing (F)CGI programs.
 
@@ -18,26 +18,15 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the file
    LICENSE for more details.
 *)
-(* 	$Id: cgi.ml,v 1.18 2005/06/12 21:35:46 chris_77 Exp $	 *)
 
-
-open Cgi_common
-include Cgi_types
+open CgiCommon
+open CgiTypes
 open Printf
-
+module Cookie = CgiCookie
 
 module Request =
 struct
-  type t = Cgi_types.request
-
-  type role = Cgi_types.role =
-    | Responder
-    | Authorizer
-    | Filter
-
-  type gateway = Cgi_types.gateway =
-    | CGI of int * int
-    | FCGI of int
+  type t = request
 
   let gateway r = r.gateway
   let role r = r.role
@@ -46,7 +35,7 @@ struct
     try Hashtbl.find r.metavars name with Not_found -> ""
 
   let path_info r = metavar r "PATH_INFO"
-  let protocol r = String.uppercase(metavar r "SERVER_PROTOCOL")
+  let protocol r = String.uppercase_ascii (metavar r "SERVER_PROTOCOL")
   let remote_addr r = metavar r "REMOTE_ADDR"
   let server_name r = metavar r "SERVER_NAME"
   let server_port r =
@@ -71,13 +60,13 @@ end
 let random_sessionid =
   if Sys.file_exists "/dev/urandom" then begin
     fun () ->
-      let s = String.create 32 (* local => thread safe *) in
+      let s = Bytes.create 32 (* local => thread safe *) in
       let chan = open_in_bin "/dev/urandom" in
       for i = 0 to 15 do
-	let b = input_byte chan in
-	let i2 = 2 * i in
-	s.[i2] <- char_of_hex(b lsr 4);
-	s.[i2 + 1] <- char_of_hex(b land 0x0F)
+        let b = input_byte chan in
+        let i2 = 2 * i in
+        Bytes.set s i2 (char_of_hex(b lsr 4)) ;
+        Bytes.set s (i2 + 1) (char_of_hex (b land 0x0F))
       done;
       close_in chan;
       s
@@ -85,16 +74,16 @@ let random_sessionid =
   else begin
     Random.self_init();
     fun () ->
-      let s = String.create 32 in
+      let s = Bytes.create 32 in
       for i = 0 to 7 do
-	let b = Random.int 0x10000
-	and i4 = 4 * i in
-	s.[i4] <- char_of_hex(b land 0xF);
-	let b = b lsr 4 in
-	s.[i4 + 1] <- char_of_hex(b land 0xF);
-	let b = b lsr 4 in
-	s.[i4 + 2] <- char_of_hex(b land 0xF);
-	s.[i4 + 3] <- char_of_hex(b lsr 4)
+        let b = Random.int 0x10000
+        and i4 = 4 * i in
+        Bytes.set s i4 (char_of_hex (b land 0xF));
+        let b = b lsr 4 in
+        Bytes.set s (i4 + 1) (char_of_hex (b land 0xF));
+        let b = b lsr 4 in
+        Bytes.set s (i4 + 2) (char_of_hex (b land 0xF));
+        Bytes.set s (i4 + 3) (char_of_hex(b lsr 4))
       done;
       s
   end
@@ -111,8 +100,8 @@ object
   method output : (string -> unit) -> unit
 end
 
-let cookie_header r ~(cookie:Cookie.cookie option)
-    ~(cookies:Cookie.cookie list option) cookie_cache =
+let cookie_header r ?(cookie:Cookie.cookie option)
+    ?(cookies:Cookie.cookie list option) cookie_cache =
   (match cookie with
    | None -> ()
    | Some c -> r.print_string("Set-Cookie: " ^ c#to_string ^ "\r\n"));
@@ -120,7 +109,7 @@ let cookie_header r ~(cookie:Cookie.cookie option)
    | None -> ()
    | Some cs ->
        List.iter(fun c -> r.print_string("Set-Cookie: "
-					 ^ c#to_string ^ "\r\n")) cs);
+                                         ^ c#to_string ^ "\r\n")) cs);
   if not cookie_cache then begin
     r.print_string "Cache-control: no-cache=\"set-cookie\"\r\n";
     (* For HTTP/1.0 proxies along the way.  Cache-control directives
@@ -136,9 +125,9 @@ class cgi r =
   let cookies = Cookie.parse cheader in
   let log =
     match r.gateway with
-    | CGI _ -> Cgi_std.log
+    | CGI _ -> CgiStd.log
     | FCGI _ -> r.prerr_string (* Date and executable name already
-				  provided by FCGI handler *)
+                                  provided by FCGI handler *)
   in
 object(self)
 
@@ -148,7 +137,7 @@ object(self)
     if r.header_not_emitted then begin
       cookie_header r ?cookie ?cookies cookie_cache;
       r.print_string(sprintf "Content-type: %s\r\nStatus: 200 OK\r\n\r\n"
-		       content_type);
+                       content_type);
       r.header_not_emitted <- false;
     end
 
@@ -220,7 +209,7 @@ object(self)
 end
 
 
-module Cgi_args =
+module Args =
 struct
   (* We will not use [parse_query_range] because the user may not
      expect the query string to be overwritten.  In order not to copy
@@ -230,10 +219,14 @@ struct
     let key_val = rev_split '&' qs in
     let split s =
       try
-	let i = String.index s '=' in
-	(decode_range s 0 i,  decode_range s (succ i) (String.length s))
+        let i = String.index s '=' in
+        let b = Bytes.of_string s in
+        decode_range b 0 i,
+        decode_range b (succ i) (Bytes.length b)
       with
-	Not_found -> (decode_range s 0 (String.length s), "")   in
+        Not_found ->
+          let b = Bytes.of_string s in
+          decode_range b 0 (Bytes.length b), "" in
     List.rev_map split key_val
 
 
@@ -248,24 +241,24 @@ end
  ***********************************************************************)
 
 type cgi_type =
-  | CGI_std	(* Standard CGI *)
-  | CGI_socket	(* FastCGI -- Unix sockets *)
-  | CGI_pipe	(* FastCGI -- Win named pipes *)
+  | CGI_std        (* Standard CGI *)
+  | CGI_socket        (* FastCGI -- Unix sockets *)
+  | CGI_pipe        (* FastCGI -- Win named pipes *)
 
 (* Test whether the script is used as fastcgi. *)
 let cgi_type() =
   match Sys.os_type with
   | "Unix" | "Cygwin" ->
       begin
-	try let _ = Unix.getpeername Cgi_fast.fcgi_listensock in CGI_std
-	with
-	| Unix.Unix_error(Unix.ENOTCONN, _, _) -> CGI_socket
-	| Unix.Unix_error(_, _, _) -> CGI_std
+        try let _ = Unix.getpeername CgiFast.fcgi_listensock in CGI_std
+        with
+        | Unix.Unix_error(Unix.ENOTCONN, _, _) -> CGI_socket
+        | Unix.Unix_error(_, _, _) -> CGI_std
       end
   | "Win32" ->
       begin
-	try let _ = Unix.getenv "REQUEST_METHOD" in CGI_std
-	with Not_found -> CGI_pipe
+        try let _ = Unix.getenv "REQUEST_METHOD" in CGI_std
+        with Not_found -> CGI_pipe
       end
   | os -> failwith("Unsupported platform: " ^ os)
 
@@ -279,28 +272,28 @@ let establish_server ?(max_conns=1) ?(max_reqs=1) ?sockaddr
   | None ->
       begin match cgi_type() with
       | CGI_std ->
-	  (* Normal CGI -- prepare a single request *)
-	  f { fd = Unix.stdin;
-	      max_conns = 1;
-	      max_reqs = 1;
-	      handle_requests = Cgi_std.handle_request;
-	      requests = Hashtbl.create 0;
-	    }
+          (* Normal CGI -- prepare a single request *)
+          f { fd = Unix.stdin;
+              max_conns = 1;
+              max_reqs = 1;
+              handle_requests = CgiStd.handle_request;
+              requests = Hashtbl.create 0;
+            }
       | CGI_socket ->
-	  Cgi_fast.establish_server_socket ~max_conns ~max_reqs
-	    Cgi_fast.fcgi_listensock f
+          CgiFast.establish_server_socket ~max_conns ~max_reqs
+            CgiFast.fcgi_listensock f
       | CGI_pipe ->
-	  Cgi_fast.establish_server_pipe ~max_conns:1 ~max_reqs
-	    Cgi_fast.fcgi_listensock f
+          CgiFast.establish_server_pipe ~max_conns:1 ~max_reqs
+            CgiFast.fcgi_listensock f
       end
 
   | Some sockaddr ->
       (* FastCGI on a distant machine, listen on the given socket. *)
       let sock =
-	Unix.socket (Unix.domain_of_sockaddr sockaddr) Unix.SOCK_STREAM 0 in
+        Unix.socket (Unix.domain_of_sockaddr sockaddr) Unix.SOCK_STREAM 0 in
       Unix.setsockopt sock Unix.SO_REUSEADDR true;
       Unix.bind sock sockaddr;
-      Cgi_fast.establish_server_socket ~max_conns ~max_reqs sock f
+      CgiFast.establish_server_socket ~max_conns ~max_reqs sock f
 
 
 let handle_requests ?(fork=no_fork) f conn =
