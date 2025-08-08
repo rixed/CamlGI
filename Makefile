@@ -6,7 +6,7 @@ PKGVERSION = $(shell grep version META | sed -e "s/.*\"\([^\"]*\)\".*/\1/")
 
 include Makefile.config
 
-OCAMLFLAGS = -dtypes -I +threads
+OCAMLFLAGS = -annot -I +threads
 OCAMLOPTFLAGS = -inline 2 -I +threads
 OCAMLDOCFLAGS =
 
