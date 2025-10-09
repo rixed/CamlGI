@@ -27,7 +27,7 @@ INSTALL : See the file of the same name!
 LIMITATIONS
 
 Beware that FCGI does not support the non-parsed header feature of
-CGI, so do not use it if you want your scripts to be portable accross
+CGI, so do not use it if you want your scripts to be portable across
 the two systems.
 
 

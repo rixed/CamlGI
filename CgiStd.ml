@@ -114,7 +114,7 @@ let handle_request fork f conn =
     access = Mutex.create();
     stdout = Buffer.create 0;
     stderr = Buffer.create 0;
-    (* FCGI managment fields -- unused here *)
+    (* FCGI management fields -- unused here *)
     id = 1;
     keep_conn = false;
     status = Handler_launched;

@@ -410,7 +410,7 @@ let handle_request_error conn f request =
 
 
 (* Listen to incoming records on [fd] and build requests from them.
-   It is the responsability of this function to manage multiplexed
+   It is the responsibility of this function to manage multiplexed
    connections and to distribute incoming data.  *)
 let handle_requests fork f conn =
   let handle_record record =
