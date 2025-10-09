@@ -152,4 +152,4 @@ let handle_request fork f conn =
       (* FIXME: The following methods are currently unsupported "PUT"
          | "DELETE" | "OPTIONS" | "TRACE" *)
       (* Unknown method *)
-      close_request_error request 405 "Method Not Allowed"
+      close_request_error request 405 ("Method Not Allowed ("^ rmethod ^")")
