@@ -1,4 +1,4 @@
-(* File: Cgi.mli
+(* File: CamlGI.mli
 
    Copyright (C) 2004
 

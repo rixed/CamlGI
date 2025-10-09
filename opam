@@ -1,0 +1,27 @@
+opam-version: "2.0"
+name: "CamlGI"
+version: "0.7"
+synopsis: "OCaml (F)CGI library"
+description: """
+CamlGI supports multiple connections and multiplexed requests.
+You can execute those concurrently with the model of your choice
+(unix fork, threads,...).
+
+This library is mostly compatible with the Cgi library of mod_caml
+so porting programs between the two is fairly straightforward.
+"""
+maintainer: "rixed-opam@happyleptic.org"
+authors: "Christophe Troestler"
+license: "LGPL-2.1-only"
+homepage: "https://github.com/rixed/CamlGI"
+dev-repo: "git+https://github.com/rixed/CamlGI"
+bug-reports: "https://github.com/rixed/CamlGI/issues"
+build: [
+  [make]
+]
+install: [make "install"]
+remove: [make "PREFIX={prefix}" "uninstall"]
+depends: [
+  "ocaml" { >= "4.12.0" }
+  "ocamlfind" {build & >= "1.9.0"}
+]

@@ -2,6 +2,6 @@
 name="CamlGI"
 description="OCaml (F)CGI library"
 requires = "threads unix str"
-archive(byte) = "CGI.cma"
-archive(native) = "CGI.cmxa"
+archive(byte) = "CamlGI.cma"
+archive(native) = "CamlGI.cmxa"
 version = "0.7"

@@ -10,11 +10,22 @@ OCAMLFLAGS = -annot -I +threads
 OCAMLOPTFLAGS = -inline 2 -I +threads
 OCAMLDOCFLAGS =
 
-SOURCES = $(wildcard *.ml)
+SOURCES = \
+	CgiTypes.ml \
+	CgiCommon.ml \
+	CgiExpires.ml \
+	CgiCookie.ml \
+	CgiDbiPool.ml \
+	CgiFast.ml \
+	CgiSendmail.ml \
+	CgiStd.ml \
+	CgiTemplate.ml \
+	CamlGI.ml
+
 INTERFACES = $(wildcard *.mli)
 
-ARCHIVE = cgi.cma
-XARCHIVE = cgi.cmxa
+ARCHIVE = CamlGI.cma
+XARCHIVE = CamlGI.cmxa
 
 .PHONY: all byte opt install install-byte install-opt doc
 all: byte opt
@@ -22,10 +33,10 @@ byte: $(ARCHIVE)
 opt: $(XARCHIVE)
 doc: html
 
-cgi.cma: $(SOURCES:.ml=.cmo) $(INTERFACES:.mli=.cmi)
+CamlGI.cma: $(SOURCES:.ml=.cmo) $(INTERFACES:.mli=.cmi)
 	$(OCAMLC) -a -o $@ $(OCAMLFLAGS) $(SOURCES:.ml=.cmo)
 
-cgi.cmxa: $(SOURCES:.ml=.cmx) $(INTERFACES:.mli=.cmi)
+CamlGI.cmxa: $(SOURCES:.ml=.cmx) $(INTERFACES:.mli=.cmi)
 	$(OCAMLOPT) -a -o $@ $(OCAMLOPTFLAGS) $(SOURCES:.ml=.cmx)
 
 ifdef OCAMLLIBDIR
@@ -38,17 +49,20 @@ endif
 install: byte opt
 	$(OCAMLFIND) remove  $(PKGNAME) || true
 	$(OCAMLFIND) install $(OCAMLFIND_DESTDIR) $(PKGNAME) META \
-	  $(ARCHIVE) $(XARCHIVE) $(ARCHIVE:.cma=.o) $(ARCHIVE:.cma=.cmi) $(ARCHIVE:.cma=.mli)
+	  $(ARCHIVE) $(XARCHIVE) $(XARCHIVE:.cmxa=.a) $(XARCHIVE:.cmxa=.mli) \
+	  $(SOURCES:.ml=.cmx) $(SOURCES:.ml=.cmi)
 
 install-byte: byte
 	$(OCAMLFIND) remove  $(PKGNAME) || true
 	$(OCAMLFIND) install $(OCAMLFIND_DESTDIR) $(PKGNAME) META \
-	  $(ARCHIVE) $(ARCHIVE:.cma=.cmi) $(ARCHIVE:.cma=.mli)
+	  $(ARCHIVE) $(ARCHIVE:.cma=.mli) \
+	  $(SOURCES:.ml=.cmi)
 
 install-opt: opt
 	$(OCAMLFIND) remove  $(PKGNAME) || true
 	$(OCAMLFIND) install $(OCAMLFIND_DESTDIR) $(PKGNAME) META \
-	  $(XARCHIVE) $(ARCHIVE:.cma=.o) $(ARCHIVE:.cmxa=.cmi) $(ARCHIVE:.cmxa=.mli)
+	  $(XARCHIVE) $(XARCHIVE:.cmxa=.a) $(XARCHIVE:.cmxa=.mli) \
+	  $(SOURCES:.ml=.cmx) $(SOURCES:.ml=.cmi)
 
 install-doc: doc
 	[ -d "$(DOCDIR)" ] || mkdir -p "$(DOCDIR)"
@@ -91,7 +105,7 @@ include .depend
 
 .PHONY: clean dist-clean
 clean:
-	$(RM) *~ .*~ *.{o,a} *.cm[aiox] *.cmxa *.annot *.css
+	$(RM) *~ .*~ *.o *.a *.cm[aiox] *.cmxa *.annot *.css
 
 dist-clean: clean
 	$(RM) .depend

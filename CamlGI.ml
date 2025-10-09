@@ -1,4 +1,4 @@
-(* File: Cgi.ml
+(* File: CamlGI.ml
 
    Objective Caml Library for writing (F)CGI programs.
 

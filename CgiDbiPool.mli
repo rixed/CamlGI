@@ -33,7 +33,7 @@ end
 module DbiPool(Dbi_driver : DbiDriverT) :
   sig
      type connection = Dbi_driver.connection
-     val get : Cgi.Request.t ->
+     val get : CamlGI.Request.t ->
  ?host:string -> ?port:string -> ?user:string -> ?password:string ->
  string -> connection
    end
