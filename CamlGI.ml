@@ -205,7 +205,7 @@ object(self)
     if r.abort then raise Abort;
     cookies
 
-  method log = log
+  method log fmt : unit = Printf.ksprintf log fmt
 
   method request = r
 end

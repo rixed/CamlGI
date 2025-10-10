@@ -240,7 +240,7 @@ others. *)
   method cookies : Cookie.cookie list
     (** Return a list of all cookies passed to the script. *)
 
-  method log : string -> unit
+  method log : (unit, unit, string, unit) format4 -> unit
     (** [log s] Log the message [s] into the webserver log. *)
 
   method request : Request.t
