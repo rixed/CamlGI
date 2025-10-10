@@ -473,12 +473,12 @@ let handle_requests fork f conn =
               request.status <- Handler_launched;
               fork (handle_request_error conn f) request (* launch *)
           | Responder ->
+              let qs = metavar_string request "QUERY_STRING" in
+              parse_query (Bytes.of_string qs) request.params;
               (* Check whether the params are enough to launch the cgi *)
               let rmethod = metavar_string request "REQUEST_METHOD" in
               begin match String.uppercase_ascii rmethod with
               | "GET" | "HEAD" ->
-                  let qs = metavar_string request "QUERY_STRING" in
-                  parse_query (Bytes.of_string qs) request.params;
                   if conn.allow_body_in_get then
                     request.status <- Get_stdin
                   else begin
