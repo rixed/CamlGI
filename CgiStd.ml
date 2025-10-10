@@ -105,6 +105,8 @@ let handle_request fork f conn =
     gateway = gateway;
     metavars = metavars;
     params = Hashtbl.create 10;
+    body = Bytes.empty;
+    content_type = "";
     is_multipart = false;
     uploads = Hashtbl.create 1;
     print_string = Stdlib.print_string;
@@ -142,11 +144,7 @@ let handle_request fork f conn =
           close_request_error request cHTTP_BAD_REQUEST
             "Not enough data on input"
       end;
-      begin
-        try parse_post_data data request
-        with Unsupported_media_type t ->
-          close_request_error request 415 ("Unsupported Media Type: " ^ t)
-      end;
+      parse_post_data data request;
       handle_request_error f request
   | _ ->
       (* FIXME: The following methods are currently unsupported "PUT"

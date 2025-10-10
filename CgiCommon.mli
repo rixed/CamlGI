@@ -63,16 +63,10 @@ val parse_query : bytes -> (string, string) Hashtbl.t -> unit
 
 (** {2 Multipart data} *)
 
-exception Unsupported_media_type of string
-
 val parse_post_data : bytes -> CgiTypes.request -> unit
   (** [parse_post_data data request] parse [data]
       according to [content_type] and add the resulting parameters and
-      uploads to the [request].
-
-      @raise Unsupported_media_type if the [content_type] is not
-      supported or if the [data] does not conform the
-      [content_type]. *)
+      uploads to the [request]. *)
 
 
 (** {2 Dates} *)

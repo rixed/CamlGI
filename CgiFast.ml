@@ -303,6 +303,8 @@ struct
           gateway = FCGI version;
           metavars = Hashtbl.create 18;
           params = Hashtbl.create 10;
+          body = Bytes.empty;
+          content_type = "";
           is_multipart = false;
           uploads = Hashtbl.create 1;
           print_string = Buffer.add_string stdout;
@@ -507,18 +509,14 @@ let handle_requests fork f conn =
             Connection.close_request_error conn request cHTTP_BAD_REQUEST
               "CONTENT_LENGTH <> length STDIN data"
           else begin
-            try
-              parse_post_data (Buffer.to_bytes request.buf) request;
-              Buffer.clear request.buf; (* for DATA now *)
-              match request.role with
-              | Authorizer -> assert false (* never has status = Get_stdin *)
-              | Responder ->
-                  request.status <- Handler_launched;
-                  fork (handle_request_error conn f) request (* launch *)
-              | Filter -> request.status <- Get_data
-            with Unsupported_media_type t ->
-              Connection.close_request_error conn request
-                cHTTP_UNSUPPORTED_MEDIA_TYPE ("Unsupported media type: " ^ t)
+            parse_post_data (Buffer.to_bytes request.buf) request;
+            Buffer.clear request.buf; (* for DATA now *)
+            match request.role with
+            | Authorizer -> assert false (* never has status = Get_stdin *)
+            | Responder ->
+                request.status <- Handler_launched;
+                fork (handle_request_error conn f) request (* launch *)
+            | Filter -> request.status <- Get_data
           end
 
     | '\008' -> (* DATA -- only for the filter role ------------------ *)

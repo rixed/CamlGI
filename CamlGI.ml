@@ -185,6 +185,10 @@ object(self)
     if r.abort then raise Abort;
     Hashtbl.fold (fun k v l -> (k,v) :: l) r.params []
 
+  method body = r.body
+
+  method content_type = r.content_type
+
   method is_multipart =
     if r.abort then raise Abort;
     (Hashtbl.length r.uploads > 0)

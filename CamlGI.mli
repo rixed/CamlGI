@@ -220,6 +220,13 @@ others. *)
     (** Return an assoc-list mapping name -> value for all parameters.
   Note that CGI scripts may have multiple values for a single name. *)
 
+  method body : bytes
+    (** Returns the total payload of the request as a string, unless its
+  content has been successfully parsed into params. *)
+
+  method content_type : string
+    (** Returns the content-type of the request. *)
+
   method is_multipart : bool
     (** Returns true iff the request was a [multipart/form-data]
   [POST] request.  Such requests are used when you need to

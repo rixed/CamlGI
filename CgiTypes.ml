@@ -56,6 +56,8 @@ type request = {
                                             calls them PARAMS *)
   params : (string, string) Hashtbl.t; (* parameters to the script,
                                           via GET or POST *)
+  mutable body : bytes;
+  mutable content_type: string;
   mutable is_multipart : bool;
   uploads : (string, upload_data) Hashtbl.t;
   print_string : string -> unit;

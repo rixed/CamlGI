@@ -536,8 +536,6 @@ let parse_multipart boundary data request =
 
 
 
-exception Unsupported_media_type of string
-
 (* [is_prefix_ci p s] chekw whether [p] is a prefix of [s] in a case
    insensitive way.  [p] is assumed to be lowercase. *)
 let is_prefix_ci p s =
@@ -551,6 +549,7 @@ let is_prefix_ci p s =
 (* FIXME: enforce max sizes *)
 let parse_post_data data request =
   let content_type = metavar_string request "CONTENT_TYPE" in
+  request.content_type <- content_type;
   (* media-type = type "/" subtype (";" parameter)* *)
   if is_prefix_ci content_type "application/x-www-form-urlencoded" then
     parse_query data request.params
@@ -561,8 +560,8 @@ let parse_post_data data request =
       parse_multipart boundary data request
     with
       Not_found -> () (* Ignore parts without final delim,... *)
-  end
-  else raise(Unsupported_media_type content_type)
+  end else
+    request.body <- data
 
 
 
