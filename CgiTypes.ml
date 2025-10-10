@@ -97,6 +97,9 @@ type connection = {
      request will be direcly fed with [request] and will not need to
      use [requests] -- thus only the process managing the connection
      will change [requests] and it needs not to be protected. *)
+  allow_body_in_get : bool;
+  (* Carefully wait for the end of the body before calling the request
+     handler. *)
 }
 
 

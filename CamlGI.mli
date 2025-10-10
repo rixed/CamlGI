@@ -77,7 +77,7 @@ end
 (** {3 Setting up the application server} *)
 
 val establish_server : ?max_conns:int -> ?max_reqs:int ->
-  ?sockaddr:Unix.sockaddr -> ?post_max:int ->
+  ?sockaddr:Unix.sockaddr -> ?post_max:int -> ?allow_body_in_get:bool ->
   (CgiTypes.connection -> unit) -> unit
   (** [establish_server ?max_conns ?max_reqs ?sockaddr ?post_max f]
 starts a server listening on the socket appropriate for CGI or

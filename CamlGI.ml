@@ -273,7 +273,8 @@ let no_fork f req = f req
 
 (* FIXME: post_max unused *)
 let establish_server ?(max_conns=1) ?(max_reqs=1) ?sockaddr
-    ?(post_max=Sys.max_string_length) (f : connection -> unit) =
+    ?(post_max=Sys.max_string_length) ?(allow_body_in_get=false)
+    (f : connection -> unit) =
   match sockaddr with
   | None ->
       begin match cgi_type() with
@@ -284,6 +285,7 @@ let establish_server ?(max_conns=1) ?(max_reqs=1) ?sockaddr
               max_reqs = 1;
               handle_requests = CgiStd.handle_request;
               requests = Hashtbl.create 0;
+              allow_body_in_get;
             }
       | CGI_socket ->
           CgiFast.establish_server_socket ~max_conns ~max_reqs

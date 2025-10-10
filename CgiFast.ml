@@ -479,8 +479,12 @@ let handle_requests fork f conn =
               | "GET" | "HEAD" ->
                   let qs = metavar_string request "QUERY_STRING" in
                   parse_query (Bytes.of_string qs) request.params;
-                  request.status <- Handler_launched; (* => STDIN ignored *)
-                  fork (handle_request_error conn f) request (* launch *)
+                  if conn.allow_body_in_get then
+                    request.status <- Get_stdin
+                  else begin
+                    request.status <- Handler_launched; (* => STDIN ignored *)
+                    fork (handle_request_error conn f) request (* launch *)
+                  end
               | "POST" -> request.status <- Get_stdin
               | "PUT"
               | "DELETE"
@@ -562,7 +566,8 @@ let handle_requests fork f conn =
 (* Establish server
  ***********************************************************************)
 
-let establish_server_socket sock ~max_conns ~max_reqs (f:connection -> unit) =
+let establish_server_socket sock ~max_conns ~max_reqs ?(allow_body_in_get=false)
+    (f:connection -> unit) =
   Unix.listen sock 5;
   while true do
     let (fd, server) = Unix.accept sock in
@@ -576,7 +581,8 @@ let establish_server_socket sock ~max_conns ~max_reqs (f:connection -> unit) =
                  max_conns = max_conns;
                  max_reqs = max_reqs;
                  handle_requests = handle_requests;
-                 requests = Hashtbl.create max_reqs
+                 requests = Hashtbl.create max_reqs;
+                 allow_body_in_get
                }
         else Unix.close fd (* Connection refused *)
     | Unix.ADDR_INET(addr,_) ->
@@ -585,7 +591,8 @@ let establish_server_socket sock ~max_conns ~max_reqs (f:connection -> unit) =
                  max_conns = max_conns;
                  max_reqs = max_reqs;
                  handle_requests = handle_requests;
-                 requests = Hashtbl.create max_reqs
+                 requests = Hashtbl.create max_reqs;
+                 allow_body_in_get
                }
         else Unix.close fd (* Connection refused *)
   done
@@ -594,12 +601,14 @@ let establish_server_socket sock ~max_conns ~max_reqs (f:connection -> unit) =
    launches by means of a named pipe [fd] (contrarily to the spec).
    The requests are all sent through that pipe.  Thus there is a
    single connection. *)
-let establish_server_pipe fd ~max_conns ~max_reqs (f:connection -> unit) =
+let establish_server_pipe fd ~max_conns ~max_reqs ?(allow_body_in_get=false)
+    (f:connection -> unit) =
   f { fd = fd;
       max_conns = max_conns;
       max_reqs = max_reqs;
       handle_requests = handle_requests;
-      requests = Hashtbl.create max_reqs
+      requests = Hashtbl.create max_reqs;
+      allow_body_in_get
     }
 
 
