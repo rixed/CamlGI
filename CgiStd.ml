@@ -37,7 +37,7 @@ let log msg =
 (* Send headers corresponding with Status = [errn] and message
    [err_msg]. *)
 let close_request_error r errn err_msg =
-  if r.header_not_emitted then
+  if r.header_emitted_with_status = None then
     Printf.printf "Status: %i %s\r\nContent-Type: text/html\r\n\r\n"
       errn err_msg;
   let email =
@@ -56,7 +56,7 @@ let handle_request_error f request =
     exit 0
   with
   | Exit ->
-      if request.header_not_emitted then
+      if request.header_emitted_with_status = None then
         print_string "Status: 204 No Response\r\n\r\n";
       exit 0
   | Abort ->
@@ -109,7 +109,7 @@ let handle_request fork f conn =
     uploads = Hashtbl.create 1;
     print_string = Stdlib.print_string;
     prerr_string = Stdlib.prerr_string;
-    header_not_emitted = true;
+    header_emitted_with_status = None;
     (* FCGI ouput -- not used here *)
     access = Mutex.create();
     stdout = Buffer.create 0;

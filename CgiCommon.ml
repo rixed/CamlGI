@@ -587,7 +587,7 @@ let error_html errn msg email =
   Printf.sprintf "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\"
   \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd\" lang=\"en\">
 <html><body>
-<h1>%s</h1>
+<h1>%03d %s</h1>
 <p>The server encountered an internal error or misconfiguration
 and was unable to complete your request.
 </p>
@@ -605,7 +605,7 @@ and anything you might have done that resulted in this error.
 to easily create (Fast)CGI applications!
 </i>
 </body></html>"
-    (std_error_msg errn) email msg email
+    errn (std_error_msg errn) email msg email
     (string_of_weekday t.Unix.tm_wday) (string_of_month t.Unix.tm_mon)
     t.Unix.tm_mday  t.Unix.tm_hour  t.Unix.tm_min t.Unix.tm_sec
     (t.Unix.tm_year + 1900)

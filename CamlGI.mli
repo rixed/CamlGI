@@ -172,7 +172,8 @@ end
 class cgi : Request.t ->
 object
   method header : ?content_type:string -> ?cookie:Cookie.cookie ->
-    ?cookies:Cookie.cookie list -> ?cookie_cache:bool -> unit -> unit
+    ?cookies:Cookie.cookie list -> ?cookie_cache:bool -> ?status:int ->
+    ?err_msg:string -> unit -> unit
     (** Emit the header. The default content type is "text/html". *)
 
   method template : 'a. ?content_type:string -> ?cookie:Cookie.cookie ->

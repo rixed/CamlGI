@@ -307,7 +307,7 @@ struct
           uploads = Hashtbl.create 1;
           print_string = Buffer.add_string stdout;
           prerr_string = Buffer.add_string stderr;
-          header_not_emitted = true;
+          header_emitted_with_status = None;
           access = Mutex.create();
           stdout = stdout;
           stderr = stderr;
@@ -351,7 +351,7 @@ struct
 
   (* Send the error message [err_msg] and free the request. *)
   let close_request_error conn req errn err_msg =
-    if req.header_not_emitted then
+    if req.header_emitted_with_status = None then
       req.print_string(Printf.sprintf
                          "Status: %i %s\r\nContent-Type: text/html\r\n\r\n"
                          errn err_msg);
@@ -379,9 +379,13 @@ let handle_request_error conn f request =
       0
     with
     | Exit ->
-        if request.header_not_emitted then
-          request.print_string "Status: 204 No Response\r\n\r\n";
-        0
+        (match request.header_emitted_with_status with
+        | None ->
+            request.print_string "Status: 204 No Response\r\n\r\n";
+            0
+        | Some status ->
+            let is_error = status >= 500 in
+            if is_error then 1 else 0)
     | Abort ->
         request.prerr_string "Exception \"Abort\" not caught.";
         Connection.close_request_error conn request cHTTP_PARTIAL_CONTENT
