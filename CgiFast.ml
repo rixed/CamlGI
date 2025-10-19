@@ -343,7 +343,7 @@ struct
   let free_request conn id =
     Hashtbl.remove conn.requests id
 
-  (* Flush and close output streams, then free the ressources.  We
+  (* Flush and close output streams, then free the resources.  We
      suppose the process handling is request has ended so it will not
      try to perform writes. *)
   let close_request conn id =
@@ -427,7 +427,7 @@ let handle_requests fork f conn =
     | '\001' -> (* BEGIN_REQUEST ------------------------------------- *)
         if Bytes.length record.data <> 8 then raise Ignore_record;
 (* Printf.eprintf "Begin  id = %i (%i)\n" record.rec_id (Obj.magic conn.fd); flush stderr; *)
-          if Hashtbl.length conn.requests < conn.max_reqs then
+        if Hashtbl.length conn.requests < conn.max_reqs then
           let role =
             Char.code(Bytes.get record.data 0) lsl 8 + Char.code(Bytes.get record.data 1)
           and flags = Char.code(Bytes.get record.data 2) in
@@ -441,7 +441,7 @@ let handle_requests fork f conn =
           | _ -> (* Rejecting this request that has an unknown role. *)
               send_end_request conn.fd record.rec_id UNKNOWN_ROLE cHTTP_OK
           end
-        else (* More requests that specified. *)
+        else (* More requests than specified. *)
           send_end_request conn.fd record.rec_id OVERLOADED cHTTP_OK
 
     | '\002' -> (* ABORT_REQUEST ------------------------------------- *)
@@ -576,7 +576,7 @@ let establish_server_socket sock ~max_conns ~max_reqs ?(allow_body_in_get=false)
     (f:connection -> unit) =
   Unix.listen sock 5;
   while true do
-    let (fd, server) = Unix.accept sock in
+    let fd, server = Unix.accept sock in
     (* If [fcgi_web_server_addrs] is set, the connection must come from
        one of the specified IP addesses, if not one closes the
        connection immediately. (3.2 Accepting Transport Connections) *)
