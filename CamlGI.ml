@@ -280,7 +280,7 @@ let establish_server ?(max_conns=1) ?(max_reqs=1) ?sockaddr
       begin match cgi_type() with
       | CGI_std ->
           (* Normal CGI -- prepare a single request *)
-          f { fd = Unix.stdin;
+          f { fd = Some Unix.stdin;
               max_conns = 1;
               max_reqs = 1;
               handle_requests = CgiStd.handle_request;

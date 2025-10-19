@@ -171,6 +171,7 @@ end
     unless you know what you are doing.  *)
 class cgi : Request.t ->
 object
+  (* TODO: Add custom headers! *)
   method header : ?content_type:string -> ?cookie:Cookie.cookie ->
     ?cookies:Cookie.cookie list -> ?cookie_cache:bool -> ?status:int ->
     ?err_msg:string -> unit -> unit

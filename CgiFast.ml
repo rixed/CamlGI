@@ -325,20 +325,26 @@ struct
         }
     end
 
+  let with_fd conn f =
+    match conn.fd with
+    | None -> ()
+    | Some fd -> f fd
+
   (* Try to flush all outputs -- but do not insist if it is locked by
      a thread processing a request. *)
   let try_flush conn =
-    Hashtbl.iter (fun id req ->
-                    if Mutex.try_lock req.access then begin
-                      output_string fcgi_stdout conn.fd id
-                        (Buffer.to_bytes req.stdout);
-                      Buffer.clear req.stdout;
-                      output_string fcgi_stderr conn.fd id
-                        (Buffer.to_bytes req.stderr);
-                      Buffer.clear req.stderr;
-                      Mutex.unlock req.access;
-                    end
-                 ) conn.requests
+    with_fd conn (fun fd ->
+      Hashtbl.iter (fun id req ->
+                      if Mutex.try_lock req.access then begin
+                        output_string fcgi_stdout fd id
+                          (Buffer.to_bytes req.stdout);
+                        Buffer.clear req.stdout;
+                        output_string fcgi_stderr fd id
+                          (Buffer.to_bytes req.stderr);
+                        Buffer.clear req.stderr;
+                        Mutex.unlock req.access;
+                      end
+                   ) conn.requests)
 
   let free_request conn id =
     Hashtbl.remove conn.requests id
@@ -347,12 +353,13 @@ struct
      suppose the process handling is request has ended so it will not
      try to perform writes. *)
   let close_request conn id =
-    let req = Hashtbl.find conn.requests id in
-    output_string fcgi_stdout conn.fd id (Buffer.to_bytes req.stdout);
-    output_string_unsafe fcgi_stdout conn.fd id "" ;
-    output_string fcgi_stderr conn.fd id (Buffer.to_bytes req.stderr);
-    output_string_unsafe fcgi_stderr conn.fd id "" ;
-    free_request conn id
+    with_fd conn (fun fd ->
+      let req = Hashtbl.find conn.requests id in
+      output_string fcgi_stdout fd id (Buffer.to_bytes req.stdout);
+      output_string_unsafe fcgi_stdout fd id "" ;
+      output_string fcgi_stderr fd id (Buffer.to_bytes req.stderr);
+      output_string_unsafe fcgi_stderr fd id "" ;
+      free_request conn id)
 
   (* Send the error message [err_msg] and free the request. *)
   let close_request_error conn req errn err_msg =
@@ -367,10 +374,13 @@ struct
         with Not_found -> "webmaster@" ^ (Unix.gethostname()) in
     req.print_string(error_html errn err_msg email);
     close_request conn req.id
-end
 
-let close_no_error fd =
-  try Unix.close fd with _ -> ()
+  let close_no_error conn =
+    with_fd conn (fun fd ->
+      conn.fd <- None;
+      Printf.eprintf "CamlGI: Closing fd=%i\n%!" (Obj.magic fd);
+      try Unix.close fd with _ -> ())
+end
 
 
 (* [handle_request_error conn f request] apply [f] to [request] and
@@ -407,13 +417,13 @@ let handle_request_error conn f request =
         Connection.close_request_error conn request
           cHTTP_INTERNAL_SERVER_ERROR "Internal Server Error";
         1 in
-  send_end_request conn.fd request.id REQUEST_COMPLETE exit_code;
-  if not request.keep_conn then
+  Connection.with_fd conn (fun fd ->
+    send_end_request fd request.id REQUEST_COMPLETE exit_code);
+  if not request.keep_conn then begin
     (* Hopefully, when we have to close the connection, there will
        be only one request sent. *)
-(     Unix.close conn.fd
-(*       ; Printf.eprintf "Closed id = %i (%i)\n" request.id (Obj.magic conn.fd); flush stderr; *)
-      )
+    Connection.close_no_error conn;
+  end
 
 
 
@@ -439,10 +449,12 @@ let handle_requests fork f conn =
           | 3 -> Connection.add_request conn record.rec_id record.version
               Filter flags
           | _ -> (* Rejecting this request that has an unknown role. *)
-              send_end_request conn.fd record.rec_id UNKNOWN_ROLE cHTTP_OK
+              Connection.with_fd conn (fun fd ->
+                send_end_request fd record.rec_id UNKNOWN_ROLE cHTTP_OK)
           end
         else (* More requests than specified. *)
-          send_end_request conn.fd record.rec_id OVERLOADED cHTTP_OK
+          Connection.with_fd conn (fun fd ->
+            send_end_request fd record.rec_id OVERLOADED cHTTP_OK)
 
     | '\002' -> (* ABORT_REQUEST ------------------------------------- *)
         let request =
@@ -451,7 +463,8 @@ let handle_requests fork f conn =
         if request.status <> Handler_launched then begin
           (* The request is not complete, this library frees it. *)
           Connection.free_request conn record.rec_id;
-          send_end_request conn.fd record.rec_id REQUEST_COMPLETE cHTTP_OK;
+          Connection.with_fd conn (fun fd ->
+            send_end_request fd record.rec_id REQUEST_COMPLETE cHTTP_OK);
         end
         else (* The spec says that the return code should be truly from
                 the application.  So we just set a flag in the request
@@ -544,24 +557,28 @@ let handle_requests fork f conn =
         end
 
     | '\009' -> (* GET_VALUES -- handled by this library ------------- *)
-        handle_get_values conn.fd record ~max_conns:conn.max_conns
-          ~max_reqs:conn.max_reqs ~multiplex:(conn.max_reqs > 1)
+        Connection.with_fd conn (fun fd ->
+          handle_get_values fd record ~max_conns:conn.max_conns
+            ~max_reqs:conn.max_reqs ~multiplex:(conn.max_reqs > 1))
 
     | _ -> (* UNKNOWN_TYPE ------------------------------------------- *)
-        send_unknown_type conn.fd record.ty
+        Connection.with_fd conn (fun fd ->
+          send_unknown_type fd record.ty)
     end;
     Connection.try_flush conn;
   in
   try
-    while true do
-      try  handle_record(input_record conn.fd)
-      with Ignore_record -> () (* Ignore the record if invalid *)
+    while conn.fd <> None do
+      let fd = Option.get conn.fd in
+      try handle_record(input_record fd)
+      with Ignore_record -> ()
     done
   with
   | Client_closed ->
-      close_no_error conn.fd
+      Printf.eprintf "CamlGI: Client closed the connection!\n%!" ;
+      Connection.close_no_error conn
   | Unix.Unix_error(_, _, _) ->
-      close_no_error conn.fd
+      Connection.close_no_error conn
       (* Likely the connection has been closed, by the server or by us
          to signify a end-of-request.  (Still, we are not sure, so we
          try to close it again.)  The CGI script must not end, just
@@ -574,7 +591,7 @@ let handle_requests fork f conn =
 
 let establish_server_socket sock ~max_conns ~max_reqs ?(allow_body_in_get=false)
     (f:connection -> unit) =
-  Unix.listen sock 5;
+  Unix.listen sock max_conns;
   while true do
     let fd, server = Unix.accept sock in
     (* If [fcgi_web_server_addrs] is set, the connection must come from
@@ -583,7 +600,7 @@ let establish_server_socket sock ~max_conns ~max_reqs ?(allow_body_in_get=false)
     match server with
     | Unix.ADDR_UNIX _ ->
         if fcgi_web_server_addrs = []
-        then f { fd = fd;
+        then f { fd = Some fd;
                  max_conns = max_conns;
                  max_reqs = max_reqs;
                  handle_requests = handle_requests;
@@ -593,7 +610,7 @@ let establish_server_socket sock ~max_conns ~max_reqs ?(allow_body_in_get=false)
         else Unix.close fd (* Connection refused *)
     | Unix.ADDR_INET(addr,_) ->
         if fcgi_web_server_addrs = [] || List.mem addr fcgi_web_server_addrs
-        then f { fd = fd;
+        then f { fd = Some fd;
                  max_conns = max_conns;
                  max_reqs = max_reqs;
                  handle_requests = handle_requests;
@@ -609,7 +626,7 @@ let establish_server_socket sock ~max_conns ~max_reqs ?(allow_body_in_get=false)
    single connection. *)
 let establish_server_pipe fd ~max_conns ~max_reqs ?(allow_body_in_get=false)
     (f:connection -> unit) =
-  f { fd = fd;
+  f { fd = Some fd;
       max_conns = max_conns;
       max_reqs = max_reqs;
       handle_requests = handle_requests;

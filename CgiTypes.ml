@@ -82,7 +82,7 @@ type request = {
 }
 
 type connection = {
-  fd : Unix.file_descr;
+  mutable fd : Unix.file_descr option;
   max_conns : int;
   max_reqs : int;
   handle_requests : ((request -> unit) -> request -> unit) ->
