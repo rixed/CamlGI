@@ -124,6 +124,10 @@ exception Ignore_record
       spec or because we do not care what such request is (e.g. for a
       "GET" we do not need stdin). *)
 
+exception Client_closed
+  (** Raised when the client closed the connection while a record was
+      expected. *)
+
 exception HttpError of int
 
 (* Names for HTTP errors

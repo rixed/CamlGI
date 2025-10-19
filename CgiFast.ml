@@ -194,12 +194,15 @@ let lengths_of_key_val k v =
  ***********************************************************************)
 
 let rec really_read_aux fd buf ofs len =
+  if len <= 0 then invalid_arg "really_read_aux" ;
   let r = Unix.read fd buf ofs len in
+  if r = 0 then raise Client_closed;
   if r < len then really_read_aux fd buf (ofs + r) (len - r)
-  else buf
 
 let really_read fd len =
-  really_read_aux fd (Bytes.create len) 0 len
+  let buf = Bytes.create len in
+  if len > 0 then really_read_aux fd buf 0 len;
+  buf
 
 (* Padding is at most 256 bytes long and we do not care about thread
    safety (since we read garbage anyway), so we hoist the buffer
@@ -555,7 +558,10 @@ let handle_requests fork f conn =
       with Ignore_record -> () (* Ignore the record if invalid *)
     done
   with
-  | Unix.Unix_error(_, _, _) -> close_no_error conn.fd
+  | Client_closed ->
+      close_no_error conn.fd
+  | Unix.Unix_error(_, _, _) ->
+      close_no_error conn.fd
       (* Likely the connection has been closed, by the server or by us
          to signify a end-of-request.  (Still, we are not sure, so we
          try to close it again.)  The CGI script must not end, just
