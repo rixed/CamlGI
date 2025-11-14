@@ -131,14 +131,16 @@ class cgi r =
   in
 object(self)
 
-  method header ?(content_type="text/html")
+  method header ?(content_type="text/html") ?content_length
     ?cookie ?cookies ?(cookie_cache=false) ?(status=200) ?err_msg () =
     if r.abort then raise Abort;
     if r.header_emitted_with_status = None then begin
       cookie_header r ?cookie ?cookies cookie_cache;
+      Option.iter (fun l ->
+        r.print_string(sprintf "Content-Length: %d\r\n" l)) content_length;
       let err_msg =
         match err_msg with Some m -> m | None -> std_error_msg status in
-      r.print_string(sprintf "Content-type: %s\r\nStatus: %03d %s\r\n\r\n"
+      r.print_string(sprintf "Content-Type: %s\r\nStatus: %03d %s\r\n\r\n"
                        content_type status err_msg);
       r.header_emitted_with_status <- Some status;
     end
