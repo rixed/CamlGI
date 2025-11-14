@@ -589,7 +589,7 @@ let handle_requests fork f conn =
 (* Establish server
  ***********************************************************************)
 
-let establish_server_socket sock ~max_conns ~max_reqs ?(allow_body_in_get=false)
+let establish_server_socket sock ~max_conns ~max_reqs ~allow_body_in_get
     (f:connection -> unit) =
   Unix.listen sock max_conns;
   while true do
@@ -624,7 +624,7 @@ let establish_server_socket sock ~max_conns ~max_reqs ?(allow_body_in_get=false)
    launches by means of a named pipe [fd] (contrarily to the spec).
    The requests are all sent through that pipe.  Thus there is a
    single connection. *)
-let establish_server_pipe fd ~max_conns ~max_reqs ?(allow_body_in_get=false)
+let establish_server_pipe fd ~max_conns ~max_reqs ~allow_body_in_get
     (f:connection -> unit) =
   f { fd = Some fd;
       max_conns = max_conns;

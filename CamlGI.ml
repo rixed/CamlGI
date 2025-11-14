@@ -273,7 +273,7 @@ let no_fork f req = f req
 
 (* FIXME: post_max unused *)
 let establish_server ?(max_conns=1) ?(max_reqs=1) ?sockaddr
-    ?(post_max=Sys.max_string_length) ?(allow_body_in_get=false)
+    ?(post_max=Sys.max_string_length) ?(allow_body_in_get=true)
     (f : connection -> unit) =
   match sockaddr with
   | None ->
@@ -288,10 +288,10 @@ let establish_server ?(max_conns=1) ?(max_reqs=1) ?sockaddr
               allow_body_in_get;
             }
       | CGI_socket ->
-          CgiFast.establish_server_socket ~max_conns ~max_reqs
+          CgiFast.establish_server_socket ~max_conns ~max_reqs ~allow_body_in_get
             CgiFast.fcgi_listensock f
       | CGI_pipe ->
-          CgiFast.establish_server_pipe ~max_conns:1 ~max_reqs
+          CgiFast.establish_server_pipe ~max_conns:1 ~max_reqs ~allow_body_in_get
             CgiFast.fcgi_listensock f
       end
 
@@ -301,7 +301,7 @@ let establish_server ?(max_conns=1) ?(max_reqs=1) ?sockaddr
         Unix.socket (Unix.domain_of_sockaddr sockaddr) Unix.SOCK_STREAM 0 in
       Unix.setsockopt sock Unix.SO_REUSEADDR true;
       Unix.bind sock sockaddr;
-      CgiFast.establish_server_socket ~max_conns ~max_reqs sock f
+      CgiFast.establish_server_socket ~max_conns ~max_reqs ~allow_body_in_get sock f
 
 
 let handle_requests ?(fork=no_fork) f conn =
