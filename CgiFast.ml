@@ -73,14 +73,18 @@ type protocol_status =
 (* Output functions
  ***********************************************************************)
 
+(* Retry as long as there are no errors: *)
+let rec write fd buf ofs len =
+  let s = Unix.single_write fd buf ofs len in
+  if s < len then write fd buf (ofs + s) (len - s)
+
 (* [output ty fd id s ofs len] send on [fd] for a request [id], a
    record of type [ty] whose data is the substring [s.[ofs .. ofs +
    len - 1]] where [len <= 65535].  [ty] can be [fcgi_stdout],
    [fcgi_stderr], [fcgi_get_values_result] or [fcgi_unknown_type]. *)
 let output ty fd id s ofs len =
   let padding_len = 8 - len mod 8 in
-  (* We keep total size a multiple of 8 bytes so the web server can
-     easily align the data for efficency. *)
+  (* Rumor has it that some FCGI clients expect 8 bytes alignment *)
   let r = Bytes.create 8 in
   Bytes.set r 0 fcgi_version;
   Bytes.set r 1 ty;
@@ -89,9 +93,9 @@ let output ty fd id s ofs len =
   Bytes.set r 4 (Char.chr(len lsr 8));
   Bytes.set r 5 (Char.chr(len land 255)); (* contentLength *)
   Bytes.set r 6 (Char.chr(padding_len));
-  ignore(Unix.write fd r 0 8);
-  ignore(Unix.write fd s ofs len);
-  ignore(Unix.write fd r 0 padding_len) (* Padding (garbage) *)
+  write fd r 0 8;
+  write fd s ofs len;
+  write fd r 0 padding_len (* Padding (garbage) *)
 
 (* [output_string_unsafe ty fd id s] send on [fd] for a request [id], a
    record of type [ty] whose data is [s].  It is assumed that
@@ -134,7 +138,7 @@ let send_end_request fd id status exit_code =
                             | CANT_MPX_CONN ->    1
                             | OVERLOADED ->       2
                             | UNKNOWN_ROLE ->     3)); (* protocolStatus *)
-  ignore(Unix.write fd r 0 16)
+  write fd r 0 16
 
 let send_unknown_type fd t =
   let r = Bytes.create 16 in
@@ -146,8 +150,7 @@ let send_unknown_type fd t =
   Bytes.set r 5 '\008'; (* contentLength = 8 *)
   Bytes.set r 6 '\000'; (* no padding *)
   Bytes.set r 8 t; (* type *)
-  ignore(Unix.write fd r 0 16)
-
+  write fd r 0 16
 
 let set_length4 s ofs n =
   (* 4 bytes encoding of the length [n] *)
@@ -194,7 +197,7 @@ let lengths_of_key_val k v =
  ***********************************************************************)
 
 let rec really_read_aux fd buf ofs len =
-  if len <= 0 then invalid_arg "really_read_aux" ;
+  if len <= 0 then invalid_arg "really_read_aux";
   let r = Unix.read fd buf ofs len in
   if r = 0 then raise Client_closed;
   if r < len then really_read_aux fd buf (ofs + r) (len - r)
@@ -330,35 +333,38 @@ struct
     | None -> ()
     | Some fd -> f fd
 
+  let flush_stream ~and_close fd id fcgi_stream buf_name buf =
+    let bytes = Buffer.to_bytes buf in
+    output_string fcgi_stream fd id bytes;
+    Buffer.clear buf;
+    if and_close then
+      (* FCGI protocol mandates an empty record to close the stream: *)
+      output_string_unsafe fcgi_stream fd id ""
+
   (* Try to flush all outputs -- but do not insist if it is locked by
      a thread processing a request. *)
   let try_flush conn =
     with_fd conn (fun fd ->
       Hashtbl.iter (fun id req ->
-                      if Mutex.try_lock req.access then begin
-                        output_string fcgi_stdout fd id
-                          (Buffer.to_bytes req.stdout);
-                        Buffer.clear req.stdout;
-                        output_string fcgi_stderr fd id
-                          (Buffer.to_bytes req.stderr);
-                        Buffer.clear req.stderr;
-                        Mutex.unlock req.access;
-                      end
-                   ) conn.requests)
+        if Mutex.try_lock req.access then begin
+          Fun.protect ~finally:(fun () -> Mutex.unlock req.access)
+            (fun () ->
+              flush_stream ~and_close:false fd id fcgi_stdout "stdout" req.stdout;
+              flush_stream ~and_close:false fd id fcgi_stderr "stderr" req.stderr)
+        end
+      ) conn.requests)
 
   let free_request conn id =
     Hashtbl.remove conn.requests id
 
   (* Flush and close output streams, then free the resources.  We
-     suppose the process handling is request has ended so it will not
+     suppose the process handling this request has ended so it will not
      try to perform writes. *)
   let close_request conn id =
     with_fd conn (fun fd ->
       let req = Hashtbl.find conn.requests id in
-      output_string fcgi_stdout fd id (Buffer.to_bytes req.stdout);
-      output_string_unsafe fcgi_stdout fd id "" ;
-      output_string fcgi_stderr fd id (Buffer.to_bytes req.stderr);
-      output_string_unsafe fcgi_stderr fd id "" ;
+      flush_stream ~and_close:true fd id fcgi_stdout "stdout" req.stdout;
+      flush_stream ~and_close:true fd id fcgi_stderr "stderr" req.stderr;
       free_request conn id)
 
   (* Send the error message [err_msg] and free the request. *)
@@ -378,8 +384,10 @@ struct
   let close_no_error conn =
     with_fd conn (fun fd ->
       conn.fd <- None;
-      Printf.eprintf "CamlGI: Closing fd=%i\n%!" (Obj.magic fd);
       try Unix.close fd with _ -> ())
+
+  let abort_all conn =
+    Hashtbl.iter (fun _id r -> r.abort <- true) conn.requests
 end
 
 
@@ -422,9 +430,8 @@ let handle_request_error conn f request =
   if not request.keep_conn then begin
     (* Hopefully, when we have to close the connection, there will
        be only one request sent. *)
-    Connection.close_no_error conn;
+    Connection.close_no_error conn
   end
-
 
 
 
@@ -575,9 +582,12 @@ let handle_requests fork f conn =
     done
   with
   | Client_closed ->
-      Printf.eprintf "CamlGI: Client closed the connection!\n%!" ;
+      (* TODO: Cancel the worker thread *)
+      Connection.abort_all conn ;
       Connection.close_no_error conn
-  | Unix.Unix_error(_, _, _) ->
+  | Unix.Unix_error(_, _, _) as e ->
+      (* TODO: Cancel the worker thread *)
+      Connection.abort_all conn ;
       Connection.close_no_error conn
       (* Likely the connection has been closed, by the server or by us
          to signify a end-of-request.  (Still, we are not sure, so we
