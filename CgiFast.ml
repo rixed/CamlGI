@@ -302,8 +302,8 @@ struct
       (* Previous request still exist, cannot accept a new one! *)
       raise Ignore_record
     else begin
-      let stdout = Buffer.create 1024
-      and stderr = Buffer.create 160 in
+      let stdout = Buffer.create 16384
+      and stderr = Buffer.create 4096 in
       Hashtbl.add conn.requests id
         { role = role;
           gateway = FCGI version;
