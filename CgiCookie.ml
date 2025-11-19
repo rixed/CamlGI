@@ -21,8 +21,13 @@
 
 open CgiCommon
 
+type same_site = Strict | Lax
 
-class cookie ~name ~value ~max_age ~domain ~path ~secure =
+let string_of_same_site = function
+  | Strict -> "Strict"
+  | Lax -> "Lax"
+
+class cookie ~name ~value ~max_age ~domain ~path ~secure ?same_site () =
 object (self)
   val mutable name = name
   val mutable value = value
@@ -60,30 +65,32 @@ object (self)
        interpreted by the browser to determine whether the cookie
        must be sent back. *)
     if domain <> "" then begin
-      Buffer.add_string buf "; domain=";
+      Buffer.add_string buf "; Domain=";
       Buffer.add_string buf domain;
     end;
     if path <> "" then begin
-      Buffer.add_string buf "; path=";
+      Buffer.add_string buf "; Path=";
       Buffer.add_string buf path;
     end;
-    if secure then Buffer.add_string buf "; secure";
+    if secure then Buffer.add_string buf "; Secure";
     begin match max_age with
     | None -> ()
     | Some m ->
         Buffer.add_string buf "; Max-Age=";
         Buffer.add_string buf (if m >= 0 then (string_of_int m) else "0");
-        (* For compatibility with old browsers: *)
-        Buffer.add_string buf "; expires=";
-        Buffer.add_string buf (if m > 0 then (CgiExpires.make m)
-                               else "Thu, 1 Jan 1970 00:00:00 GMT");
+    end;
+    begin match same_site with
+    | None -> ()
+    | Some ss ->
+        Buffer.add_string buf "; SameSite=";
+        Buffer.add_string buf (string_of_same_site ss)
     end;
     Buffer.contents buf
 end
 
 
-let cookie ?max_age ?(domain="") ?(path="") ?(secure=false) name value =
-  new cookie ~name ~value ~domain ~max_age ~path ~secure
+let cookie ?max_age ?(domain="") ?(path="") ?(secure=false) ?same_site name value =
+  new cookie ~name ~value ~domain ~max_age ~path ~secure ?same_site ()
 
 
 let parse =

@@ -17,10 +17,13 @@
    LICENSE for more details.
 *)
 
+type same_site = Strict | Lax
+
 (** Generate and parse cookies *)
 class cookie :
   name:string -> value:string -> max_age:int option ->
   domain:string -> path:string -> secure:bool ->
+  ?same_site:same_site -> unit ->
 object
   method name : string
     (** Return the name of the cookie. *)
@@ -56,7 +59,7 @@ object
 end
 
 val cookie : ?max_age:int -> ?domain:string -> ?path:string ->
-  ?secure:bool -> string -> string -> cookie
+  ?secure:bool -> ?same_site:same_site -> string -> string -> cookie
   (** [cookie ?expires ?domain ?path name value] creates a cookie
 with name [name] and value [value].
 
@@ -64,6 +67,7 @@ with name [name] and value [value].
 @param domain  domain of the cookie (default: "").
 @param path    path of the cookie (default: "").
 @param secure  whether the cookie is secure (default: [false]).
+@param same_site value for SameSite setting (Lax or Strict).
   *)
 
 val parse : string -> cookie list
