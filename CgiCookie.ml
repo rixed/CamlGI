@@ -56,7 +56,6 @@ object (self)
     Buffer.add_string buf (encode_cookie name);
     Buffer.add_char buf '=';
     Buffer.add_string buf (encode_cookie value);
-    Buffer.add_string buf "; Version=1";
     (* We do not encode the domain and path because they will be
        interpreted by the browser to determine whether the cookie
        must be sent back. *)
