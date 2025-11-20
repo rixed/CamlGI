@@ -17,6 +17,7 @@ homepage: "https://github.com/rixed/CamlGI"
 dev-repo: "git+https://github.com/rixed/CamlGI"
 bug-reports: "https://github.com/rixed/CamlGI/issues"
 build: [
+  [make "dep"]
   [make]
 ]
 install: [make "install"]
