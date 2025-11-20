@@ -585,7 +585,7 @@ let handle_requests fork f conn =
       (* TODO: Cancel the worker thread *)
       Connection.abort_all conn ;
       Connection.close_no_error conn
-  | Unix.Unix_error(_, _, _) as e ->
+  | Unix.Unix_error(_, _, _) ->
       (* TODO: Cancel the worker thread *)
       Connection.abort_all conn ;
       Connection.close_no_error conn
