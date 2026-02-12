@@ -65,7 +65,7 @@ let random_sessionid =
       for i = 0 to 15 do
         let b = input_byte chan in
         let i2 = 2 * i in
-        Bytes.set s i2 (char_of_hex(b lsr 4)) ;
+        Bytes.set s i2 (char_of_hex(b lsr 4));
         Bytes.set s (i2 + 1) (char_of_hex (b land 0x0F))
       done;
       close_in chan;
@@ -100,24 +100,27 @@ object
   method output : (string -> unit) -> unit
 end
 
-let cookie_header r ?(cookie:Cookie.cookie option)
-    ?(cookies:Cookie.cookie list option) cookie_cache =
-  (match cookie with
-   | None -> ()
-   | Some c -> r.print_string("Set-Cookie: " ^ c#to_string ^ "\r\n"));
-  (match cookies with
-   | None -> ()
-   | Some cs ->
-       List.iter(fun c -> r.print_string("Set-Cookie: "
-                                         ^ c#to_string ^ "\r\n")) cs);
-  if not cookie_cache then begin
-    r.print_string "Cache-control: no-cache=\"set-cookie\"\r\n";
-    (* For HTTP/1.0 proxies along the way.  Cache-control directives
-       override this for HTTP/1.1.  *)
-    r.print_string "Expires: Thu, 1 Jan 1970 00:00:00 GMT\r\n";
-    r.print_string "Pragma: no-cache\r\n"
-  end
+let set_cookie_header = "Set-Cookie"
 
+let cookie_header r ?cookie ?(cookies=[]) cookie_cache =
+  let cookies =
+    match cookie with None -> cookies | Some c -> c :: cookies in
+  let headers =
+    if cookie_cache then [] else
+      [ "Cache-control", "no-cache=\"set-cookie\"";
+        (* For HTTP/1.0 proxies along the way.  Cache-control directives
+           override this for HTTP/1.1.  *)
+        "Expires", "Thu, 1 Jan 1970 00:00:00 GMT";
+        "Pragma", "no-cache" ] in
+  List.fold_left (fun headers (c : Cookie.cookie) ->
+    (set_cookie_header, c#to_string) :: headers
+  ) headers cookies
+
+let print_headers r headers =
+  List.iter (fun (n, v) ->
+    r.print_string(sprintf "%s: %s\r\n" n v)
+  ) headers;
+  r.print_string "\r\n"
 
 class cgi r =
   let cheader =
@@ -132,19 +135,23 @@ class cgi r =
 object(self)
 
   method header ?(content_type="text/html") ?content_length ?content_disposition
-    ?cookie ?cookies ?(cookie_cache=false) ?(status=200) ?err_msg () =
+    ?cookie ?cookies ?(cookie_cache=false) ?(extra=[]) ?(status=200) ?err_msg () =
     if r.abort then raise Abort;
     if r.header_emitted_with_status = None then begin
-      cookie_header r ?cookie ?cookies cookie_cache;
-      Option.iter (fun l ->
-        r.print_string(sprintf "Content-Length: %d\r\n" l)) content_length;
-      Option.iter (fun s ->
-        r.print_string(sprintf "Content-Disposition: %s\r\n" s)
-      ) content_disposition;
       let err_msg =
         match err_msg with Some m -> m | None -> std_error_msg status in
-      r.print_string(sprintf "Content-Type: %s\r\nStatus: %03d %s\r\n\r\n"
-                       content_type status err_msg);
+      let headers = cookie_header r ?cookie ?cookies cookie_cache in
+      let headers = List.rev_append extra headers in
+      let headers =
+        [ "Content-Length", Option.map string_of_int content_length;
+          "Content-Disposition", content_disposition;
+          "Content-Type", Some content_type;
+          "Status", Some (sprintf "%03d %s" status err_msg) ] |>
+        List.fold_left (fun headers (n, v) -> match v with
+          | None -> headers
+          | Some v -> (n, v) :: headers
+        ) headers in
+      print_headers r headers;
       r.header_emitted_with_status <- Some status;
     end
 
@@ -160,8 +167,9 @@ object(self)
   method redirect : 'a. ?cookie:Cookie.cookie ->
     ?cookies:Cookie.cookie list -> ?cookie_cache:bool -> string -> 'a
     = fun ?cookie ?cookies ?(cookie_cache=false) url ->
-      cookie_header r ?cookie ?cookies cookie_cache;
-      r.print_string("Location: " ^ url ^ "\r\n\r\n"); (* FIXME *)
+      let headers = cookie_header r ?cookie ?cookies cookie_cache in
+      let headers = ("Location", url) :: headers in (* FIXME *)
+      print_headers r headers;
       raise(HttpError cHTTP_MOVED_TEMPORARILY)
 
   method url () =
@@ -214,7 +222,7 @@ object(self)
     if r.abort then raise Abort;
     cookies
 
-  method log fmt : unit = Printf.ksprintf log fmt
+  method log fmt : unit = ksprintf log fmt
 
   method request = r
 end
