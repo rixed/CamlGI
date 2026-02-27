@@ -48,6 +48,9 @@ sig
   val server_software : t -> string
     (** The name and version of the web server software answering the
   request. *)
+  val http_host : t -> string
+    (** What the user actually typed in the URL, more reliable than
+  server_name. *)
 
   val accept : t -> string
     (** Returns the list of accepted MIME types by the client. *)

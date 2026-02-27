@@ -38,6 +38,7 @@ struct
   let protocol r = String.uppercase_ascii (metavar r "SERVER_PROTOCOL")
   let remote_addr r = metavar r "REMOTE_ADDR"
   let server_name r = metavar r "SERVER_NAME"
+  let http_host r = metavar r "HTTP_HOST"
   let server_port r =
     try int_of_string(metavar r "SERVER_PORT") with _ -> 80
   let server_software r = metavar r "SERVER_SOFTWARE"
