@@ -27,6 +27,8 @@
 open CgiCommon
 open CgiTypes
 
+let debug = false
+
 let fcgi_version = '\001'
 let fcgi_listensock = Unix.stdin
 
@@ -93,6 +95,8 @@ let output ty fd id s ofs len =
   Bytes.set r 4 (Char.chr(len lsr 8));
   Bytes.set r 5 (Char.chr(len land 255)); (* contentLength *)
   Bytes.set r 6 (Char.chr(padding_len));
+  if debug then
+    Printf.eprintf "CamlGI: Output 8+%d+%d bytes into fd %d\n%!" len padding_len (Obj.magic fd);
   write fd r 0 8;
   write fd s ofs len;
   write fd r 0 padding_len (* Padding (garbage) *)
@@ -138,6 +142,8 @@ let send_end_request fd id status exit_code =
                             | CANT_MPX_CONN ->    1
                             | OVERLOADED ->       2
                             | UNKNOWN_ROLE ->     3)); (* protocolStatus *)
+  if debug then
+    Printf.eprintf "CamlGI: Send 16 bytes on fd %d ending req id %d, exit code %d\n%!" (Obj.magic fd) id exit_code;
   write fd r 0 16
 
 let send_unknown_type fd t =
@@ -199,6 +205,8 @@ let lengths_of_key_val k v =
 let rec really_read_aux fd buf ofs len =
   if len <= 0 then invalid_arg "really_read_aux";
   let r = Unix.read fd buf ofs len in
+  if debug then
+    Printf.eprintf "CamlGI: Read %d/%d bytes from fd %d\n%!" r len (Obj.magic fd);
   if r = 0 then raise Client_closed;
   if r < len then really_read_aux fd buf (ofs + r) (len - r)
 
@@ -223,6 +231,9 @@ let input_record fd =
   and id =  Char.code(Bytes.get header 2) lsl 8 + Char.code(Bytes.get header 3)
   and len = Char.code(Bytes.get header 4) lsl 8 + Char.code(Bytes.get header 5)
   and padding = Char.code(Bytes.get header 6) in
+  if debug then
+    Printf.eprintf "CamlGI: input_record header %d of length %d for id %d from fd %d\n%!"
+      (Char.code (Bytes.get header 1)) len id (Obj.magic fd);
   let data = really_read fd len in
   read_padding fd padding;
   { version = version;
@@ -334,6 +345,9 @@ struct
     | Some fd -> f fd
 
   let flush_stream ~and_close fd id fcgi_stream buf_name buf =
+    if debug then
+      Printf.eprintf "CamlGI: Flushing %d bytes from %s\n%!"
+        (Buffer.length buf) buf_name;
     let bytes = Buffer.to_bytes buf in
     output_string fcgi_stream fd id bytes;
     Buffer.clear buf;
@@ -384,6 +398,7 @@ struct
   let close_no_error conn =
     with_fd conn (fun fd ->
       conn.fd <- None;
+      if debug then Printf.eprintf "CamlGI: Closing fd %i\n%!" (Obj.magic fd);
       try Unix.close fd with _ -> ())
 
   let abort_all conn =
@@ -430,6 +445,7 @@ let handle_request_error conn f request =
   if not request.keep_conn then begin
     (* Hopefully, when we have to close the connection, there will
        be only one request sent. *)
+    if debug then Printf.eprintf "CamlGI: Not keeping the connection\n%!";
     Connection.close_no_error conn
   end
 
@@ -443,7 +459,6 @@ let handle_requests fork f conn =
     begin match record.ty with
     | '\001' -> (* BEGIN_REQUEST ------------------------------------- *)
         if Bytes.length record.data <> 8 then raise Ignore_record;
-(* Printf.eprintf "Begin  id = %i (%i)\n" record.rec_id (Obj.magic conn.fd); flush stderr; *)
         if Hashtbl.length conn.requests < conn.max_reqs then
           let role =
             Char.code(Bytes.get record.data 0) lsl 8 + Char.code(Bytes.get record.data 1)
@@ -502,6 +517,9 @@ let handle_requests fork f conn =
               let rmethod = metavar_string request "REQUEST_METHOD" in
               begin match String.uppercase_ascii rmethod with
               | "GET" | "HEAD" ->
+                  if debug then
+                    Printf.eprintf "CamlGI: handle_record: method %S, allow_body_in_get: %b\n%!"
+                      rmethod conn.allow_body_in_get ;
                   if conn.allow_body_in_get then
                     request.status <- Get_stdin
                   else begin
@@ -583,10 +601,15 @@ let handle_requests fork f conn =
   with
   | Client_closed ->
       (* TODO: Cancel the worker thread *)
+      if debug then Printf.eprintf "CamlGI: Client closed the connection!\n%!";
       Connection.abort_all conn ;
       Connection.close_no_error conn
-  | Unix.Unix_error(_, _, _) ->
+  | Unix.Unix_error(_, _, _) as e ->
       (* TODO: Cancel the worker thread *)
+      if debug then
+        Printf.eprintf "CamlGI: Error on socket %s: %s\n%!"
+          (match conn.fd with None -> "None" | Some fd -> string_of_int (Obj.magic fd))
+          (Printexc.to_string e);
       Connection.abort_all conn ;
       Connection.close_no_error conn
       (* Likely the connection has been closed, by the server or by us
@@ -604,6 +627,8 @@ let establish_server_socket sock ~max_conns ~max_reqs ~allow_body_in_get
   Unix.listen sock max_conns;
   while true do
     let fd, server = Unix.accept sock in
+    if debug then
+      Printf.eprintf "CamlGI: Accepting new connection on fd %d\n%!" (Obj.magic fd);
     (* If [fcgi_web_server_addrs] is set, the connection must come from
        one of the specified IP addesses, if not one closes the
        connection immediately. (3.2 Accepting Transport Connections) *)
